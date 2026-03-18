@@ -15,6 +15,7 @@ import math
 import pygame
 from ui.constants import *
 from ui.assets import assets
+from game.fighter import Fighter
 
 
 class BattleDrawMixin:
