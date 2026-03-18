@@ -1,0 +1,259 @@
+"""
+Сцена журналу бою — детальний перегляд що відбулось в останній битві.
+"""
+import pygame
+from .base import Scene
+from ui.components import Button, Panel
+from ui.constants import *
+from ui.assets import assets
+from game.battle_log import EventType, EVENT_META
+
+# Фільтри
+FILTERS = [
+    ("Всі",     None),
+    ("Удари",   {EventType.HIT, EventType.CRIT}),
+    ("Шкода",   {EventType.ENEMY_HIT}),
+    ("Спец",    {EventType.BURN, EventType.STUN, EventType.LIFESTEAL, EventType.COMBO}),
+]
+
+ROW_H      = 34
+VISIBLE_H  = 380   # висота зони скролу
+LIST_X     = 60
+LIST_Y     = 200
+LIST_W     = SCREEN_WIDTH - 120
+
+
+class BattleLogScene(Scene):
+    """Екран журналу бою."""
+
+    def __init__(self, game):
+        super().__init__(game)
+        self.record = game.last_battle_record
+
+        self.close_btn = Button(SCREEN_WIDTH - 230, 20, 200, 50,
+                                "✖ Закрити", lambda: game.pop_scene())
+
+        # Фільтр-кнопки
+        self._filter_idx = 0
+        self._filter_btns = []
+        bx = LIST_X
+        for i, (label, _) in enumerate(FILTERS):
+            self._filter_btns.append(
+                Button(bx, 150, 130, 36, label, lambda i=i: self._set_filter(i))
+            )
+            bx += 138
+
+        self._scroll_y   = 0
+        self._max_scroll = 0
+        self._filtered   = []
+        self._rebuild()
+
+    # ── Фільтрація ────────────────────────
+
+    def _set_filter(self, idx: int):
+        self._filter_idx = idx
+        self._scroll_y = 0
+        self._rebuild()
+
+    def _rebuild(self):
+        if not self.record:
+            self._filtered = []
+            return
+        allowed = FILTERS[self._filter_idx][1]
+        if allowed is None:
+            self._filtered = self.record.events
+        else:
+            self._filtered = [e for e in self.record.events if e.etype in allowed]
+        total_h = len(self._filtered) * ROW_H
+        self._max_scroll = max(0, total_h - VISIBLE_H)
+
+    # ── Події ─────────────────────────────
+
+    def handle_event(self, event: pygame.event.Event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.game.pop_scene()
+            elif event.key == pygame.K_UP:
+                self._scroll_y = max(0, self._scroll_y - ROW_H * 3)
+            elif event.key == pygame.K_DOWN:
+                self._scroll_y = min(self._max_scroll, self._scroll_y + ROW_H * 3)
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mp = pygame.mouse.get_pos()
+            if event.button == 1:
+                self.close_btn.update(mp, True)
+                for btn in self._filter_btns:
+                    btn.update(mp, True)
+            elif event.button == 4:
+                self._scroll_y = max(0, self._scroll_y - ROW_H * 2)
+            elif event.button == 5:
+                self._scroll_y = min(self._max_scroll, self._scroll_y + ROW_H * 2)
+
+    def update(self, dt: float):
+        mp = pygame.mouse.get_pos()
+        self.close_btn.update(mp, False)
+        for btn in self._filter_btns:
+            btn.update(mp, False)
+
+    # ── Малювання ─────────────────────────
+
+    def draw(self, screen: pygame.Surface):
+        # Затемнення
+        ov = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        ov.fill((0, 0, 0, 180))
+        screen.blit(ov, (0, 0))
+
+        Panel(40, 40, SCREEN_WIDTH - 80, SCREEN_HEIGHT - 80, alpha=True).draw(screen)
+
+        if not self.record:
+            self._draw_empty(screen)
+            self.close_btn.draw(screen)
+            return
+
+        self._draw_header(screen)
+        self._draw_summary(screen)
+        self._draw_filter_btns(screen)
+        self._draw_event_list(screen)
+        self._draw_loot(screen)
+        self.close_btn.draw(screen)
+
+    def _draw_empty(self, screen):
+        font = assets.get_font(FONT_SIZE_LARGE, bold=True)
+        t = font.render("Журнал порожній — зіграй битву!", True, COLOR_TEXT_DIM)
+        screen.blit(t, (SCREEN_WIDTH // 2 - t.get_width() // 2, SCREEN_HEIGHT // 2))
+
+    def _draw_header(self, screen):
+        r = self.record
+        result_txt = "⚔ ПЕРЕМОГА" if r.player_won else "💀 ПОРАЗКА"
+        result_clr = (100, 220, 100) if r.player_won else (220, 80, 80)
+
+        font_big  = assets.get_font(FONT_SIZE_HUGE, bold=True)
+        font_med  = assets.get_font(FONT_SIZE_MEDIUM)
+        font_sm   = assets.get_font(FONT_SIZE_SMALL)
+
+        # Результат
+        res_surf = font_big.render(result_txt, True, result_clr)
+        screen.blit(res_surf, (LIST_X, 55))
+
+        # Ворог
+        enemy_txt = font_med.render(
+            f"vs  {r.enemy_icon}  {r.enemy_name}", True, COLOR_GOLD)
+        screen.blit(enemy_txt, (LIST_X + res_surf.get_width() + 30, 68))
+
+        # Час
+        secs = int(r.duration_sec)
+        time_txt = font_sm.render(
+            f"⏱ {secs // 60:02d}:{secs % 60:02d}", True, COLOR_TEXT_DIM)
+        screen.blit(time_txt, (SCREEN_WIDTH - 200, 68))
+
+        pygame.draw.line(screen, COLOR_GOLD, (LIST_X, 115), (SCREEN_WIDTH - LIST_X, 115), 1)
+
+    def _draw_summary(self, screen):
+        """Рядок підсумкових стат прямо під заголовком."""
+        r = self.record
+        font = assets.get_font(FONT_SIZE_SMALL)
+
+        stats = [
+            ("⚔ Завдано",  f"{r.damage_dealt}",  (220, 200, 100)),
+            ("🩸 Отримано", f"{r.damage_taken}",  (220, 100, 100)),
+            ("🎯 Попадань", f"{r.hits_landed}",   COLOR_TEXT),
+            ("💥 Критів",   f"{r.crits}",          (255, 200, 50)),
+            ("🛡 Блоків",   f"{r.blocks}",          (100, 180, 255)),
+            ("✨ XP",        f"+{r.xp_gained}",     (180, 130, 255)),
+            ("💰 Золото",   f"+{r.gold_gained}",   COLOR_GOLD),
+        ]
+
+        col_w = (SCREEN_WIDTH - LIST_X * 2) // len(stats)
+        for i, (lbl, val, clr) in enumerate(stats):
+            x = LIST_X + i * col_w
+
+            # Значення — велике і кольорове
+            v_surf = assets.get_font(FONT_SIZE_MEDIUM, bold=True).render(val, True, clr)
+            screen.blit(v_surf, (x, 122))
+
+            # Підпис — маленький і сірий
+            l_surf = font.render(lbl, True, COLOR_TEXT_DIM)
+            screen.blit(l_surf, (x, 148))
+
+        pygame.draw.line(screen, (60, 55, 50),
+                         (LIST_X, 170), (SCREEN_WIDTH - LIST_X, 170), 1)
+
+    def _draw_filter_btns(self, screen):
+        for i, btn in enumerate(self._filter_btns):
+            # Активний фільтр — підсвічуємо рамкою
+            btn.draw(screen)
+            if i == self._filter_idx:
+                r = pygame.Rect(btn.rect.x - 2, btn.rect.y - 2,
+                                btn.rect.width + 4, btn.rect.height + 4)
+                pygame.draw.rect(screen, COLOR_GOLD, r, 2, border_radius=6)
+
+        count_txt = assets.get_font(FONT_SIZE_SMALL).render(
+            f"{len(self._filtered)} подій", True, COLOR_TEXT_DIM)
+        screen.blit(count_txt, (LIST_X + len(FILTERS) * 138 + 10, 159))
+
+    def _draw_event_list(self, screen):
+        """Скролабельний список подій."""
+        clip_rect = pygame.Rect(LIST_X, LIST_Y, LIST_W, VISIBLE_H)
+        screen.set_clip(clip_rect)
+
+        font     = assets.get_font(FONT_SIZE_SMALL)
+        font_ico = assets.get_font(FONT_SIZE_NORMAL)
+
+        y_base = LIST_Y - self._scroll_y
+        for i, ev in enumerate(self._filtered):
+            y = y_base + i * ROW_H
+            if y + ROW_H < LIST_Y or y > LIST_Y + VISIBLE_H:
+                continue
+
+            # Рядок з чергуванням фону
+            row_surf = pygame.Surface((LIST_W, ROW_H - 2), pygame.SRCALPHA)
+            row_surf.fill((40, 35, 30, 180) if i % 2 == 0 else (30, 27, 24, 120))
+            screen.blit(row_surf, (LIST_X, y))
+
+            # Іконка
+            ico = font_ico.render(ev.icon, True, ev.color)
+            screen.blit(ico, (LIST_X + 6, y + 4))
+
+            # Текст події
+            txt = font.render(ev.to_text(), True, ev.color)
+            screen.blit(txt, (LIST_X + 36, y + 9))
+
+        screen.set_clip(None)
+
+        # Рамка списку
+        pygame.draw.rect(screen, (80, 70, 60), clip_rect, 1, border_radius=4)
+
+        # Скролбар
+        if self._max_scroll > 0:
+            track_h = VISIBLE_H
+            thumb_h = max(30, int(track_h * VISIBLE_H / (VISIBLE_H + self._max_scroll)))
+            thumb_y = LIST_Y + int((track_h - thumb_h) * self._scroll_y / self._max_scroll)
+            bar_x   = LIST_X + LIST_W + 6
+            pygame.draw.rect(screen, (50, 45, 40),
+                             pygame.Rect(bar_x, LIST_Y, 8, VISIBLE_H), border_radius=4)
+            pygame.draw.rect(screen, COLOR_GOLD,
+                             pygame.Rect(bar_x, thumb_y, 8, thumb_h), border_radius=4)
+
+            hint = assets.get_font(FONT_SIZE_SMALL).render("↑↓ або колесо миші", True, COLOR_TEXT_DIM)
+            screen.blit(hint, (LIST_X, LIST_Y + VISIBLE_H + 6))
+
+    def _draw_loot(self, screen):
+        """Здобич внизу праворуч."""
+        r = self.record
+        if not r.loot:
+            return
+
+        loot_x = SCREEN_WIDTH - 300
+        loot_y = LIST_Y
+
+        font_h = assets.get_font(FONT_SIZE_SMALL, bold=True)
+        font   = assets.get_font(FONT_SIZE_SMALL)
+
+        screen.blit(font_h.render("🎁 Здобич:", True, COLOR_GOLD), (loot_x, loot_y))
+        loot_y += 24
+
+        for icon, name, qty in r.loot:
+            qty_txt = f" x{qty}" if qty > 1 else ""
+            row = font.render(f"{icon} {name}{qty_txt}", True, COLOR_TEXT)
+            screen.blit(row, (loot_x, loot_y))
+            loot_y += 22
