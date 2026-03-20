@@ -145,12 +145,12 @@ BUTTON_STYLES = {
 # Рекомендований розмір: 1280×720 px (або більше)
 
 SCENE_BACKGROUNDS = {
-    "main_menu":   "main_menu_bg",   # ← "main_menu_bg"  якщо є файл
-    "village":      "village_bg",   # ← "village_bg"
-    "forest":       "forest_bg",    # ← "forest_bg"
-    "tower":        "tower_bg",     # ← "tower_bg"
-    "ruins":        "ruins_bg",     # ← "ruins_bg"
-    "mine":         "mine_bg",      # ← "mine_bg"
+    "main_menu":    "main_menu",   # ← "main_menu_bg"  якщо є файл
+    "village":      "village",   # ← "village_bg"
+    "forest":       "forest",    # ← "forest_bg"
+    "tower":        None,     # ← "tower_bg"
+    "ruins":        None,     # ← "ruins_bg"
+    "mine":         None,      # ← "mine_bg"
     "battle":       None,   # ← "battle_bg"
     "inventory":    None,   # ← "inventory_bg"
     "workshop":     None,   # ← "workshop_bg"
