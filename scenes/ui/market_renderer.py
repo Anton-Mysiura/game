@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/market.py
 """
+from game.data import RARITY_COLOR
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

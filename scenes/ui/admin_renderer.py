@@ -6,6 +6,9 @@
 
 Логіка гри: scenes/core/admin.py
 """
+from game.data import ITEMS
+from game.data import MATERIALS
+from game.data import BLUEPRINTS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

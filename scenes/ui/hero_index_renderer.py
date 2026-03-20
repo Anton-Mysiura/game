@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/hero_index.py
 """
+from game.heroes import HERO_RARITY_COLORS
+from game.heroes import HERO_RARITY_NAMES_UA
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 from ui.constants import *

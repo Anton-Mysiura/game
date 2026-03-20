@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/skill_tree.py
 """
+from game.skill_tree import SKILL_NODES
+from game.skill_tree import BRANCHES
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

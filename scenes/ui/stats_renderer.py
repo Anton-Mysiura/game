@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/stats.py
 """
+from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

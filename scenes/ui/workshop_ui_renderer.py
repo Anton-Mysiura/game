@@ -4,6 +4,9 @@
 Дизайнер змінює цей файл.
 Логіка: scenes/core/workshop.py + scenes/core/workshop_ui.py
 """
+from game.data import BLUEPRINTS
+from scenes.workshop import SMELT_RECIPES
+from scenes.workshop import queue_color
 import math
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/level_up.py
 """
+from ui.constants import RARITY_COLORS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 from ui.constants import *

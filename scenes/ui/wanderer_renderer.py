@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/wanderer.py
 """
+from ui.constants import RARITY_COLORS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
