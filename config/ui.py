@@ -145,20 +145,20 @@ BUTTON_STYLES = {
 # Рекомендований розмір: 1280×720 px (або більше)
 
 SCENE_BACKGROUNDS = {
-    "main_menu":    None,   # ← "main_menu_bg"  якщо є файл
-    "village":      None,   # ← "village_bg"
-    "forest":       None,   # ← "forest_bg"
-    "tower":        None,   # ← "tower_bg"
-    "ruins":        None,   # ← "ruins_bg"
-    "mine":         None,   # ← "mine_bg"
-    "battle":       None,   # ← "battle_bg"
-    "inventory":    None,   # ← "inventory_bg"
-    "workshop":     None,   # ← "workshop_bg"
-    "shop":         None,   # ← "shop_bg"
-    "world_map":    None,   # ← "world_map_bg"
-    "hero_roulette":None,   # ← "roulette_bg"
-    "victory":      None,   # ← "victory_bg"
-    "death":        None,   # ← "death_bg"
+    "main_menu":    "main_menu",   # ← "main_menu_bg"  якщо є файл
+    "village":      "village",   # ← "village_bg"
+    "forest":       "forest",    # ← "forest_bg"
+    "tower":        "tower",     # ← "tower_bg"
+    "ruins":        "ruins",     # ← "ruins_bg"
+    "mine":         "mine",      # ← "mine_bg"
+    "battle":       "battle",   # ← "battle_bg"
+    "inventory":    "inventory",   # ← "inventory_bg"
+    "workshop":     "workshop",   # ← "workshop_bg"
+    "shop":         "shop",   # ← "shop_bg"
+    "world_map":    "world_map",   # ← "world_map_bg"
+    "hero_roulette":"roulette",   # ← "roulette_bg"
+    "victory":      "victory",   # ← "victory_bg"
+    "death":        "death",   # ← "death_bg"
 }
 
 # Тайловий фон — якщо True, малий PNG буде тайлитись по всьому екрану

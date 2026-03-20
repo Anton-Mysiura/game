@@ -30,7 +30,14 @@ class BaseRenderer:
 
     def draw(self, screen: pygame.Surface):
         """Головний метод малювання. Перевизначається в підкласах."""
-        pass
+        # Малюємо фон сцени якщо він є (SceneWithBackground)
+        if hasattr(self.scene, 'background') and self.scene.background:
+            screen.blit(self.scene.background, (0, 0))
+        elif hasattr(self.scene, '_bg') and self.scene._bg:
+            screen.blit(self.scene._bg, (0, 0))
+        else:
+            from ui.constants import COLOR_BG
+            screen.fill(COLOR_BG)
 
     # ── Утиліти, спільні для всіх рендерерів ─────────────────────
 
