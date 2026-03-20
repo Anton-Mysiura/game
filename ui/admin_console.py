@@ -427,7 +427,7 @@ class AdminConsole:
         self._log(f"Перки видалено ({cnt} шт.)", COLOR_SUCCESS)
 
     def _cmd_seenall(self, args):
-        from scenes.bestiary import ENEMY_REGISTRY
+        from scenes.core.bestiary import ENEMY_REGISTRY
         for e in ENEMY_REGISTRY:
             self.player.enemies_seen.add(e["sprite_name"])
         self._log(f"Бестіарій відкрито ({len(ENEMY_REGISTRY)} ворогів)", COLOR_SUCCESS)

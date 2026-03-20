@@ -146,33 +146,33 @@ class Game:
 
         # Створюємо нову сцену
         if scene_name == "main_menu":
-            from scenes.main_menu import MainMenuScene
+            from scenes.core.main_menu import MainMenuScene
             self.current_scene = MainMenuScene(self)
 
         elif scene_name == "hero_roulette":
-            from scenes.hero_roulette import HeroRouletteScene
+            from scenes.core.hero_roulette import HeroRouletteScene
             self.current_scene = HeroRouletteScene(self)
 
         elif scene_name == "hero_slots":
-            from scenes.hero_slots import HeroSlotsScene
+            from scenes.core.hero_slots import HeroSlotsScene
             self.current_scene = HeroSlotsScene(self)
 
         elif scene_name == "village":
-            from scenes.village import VillageScene
+            from scenes.core.village import VillageScene
             self.current_scene = VillageScene(self)
 
         elif scene_name == "shop":
-            from scenes.shop import ShopScene
+            from scenes.core.shop import ShopScene
             self.current_scene = ShopScene(self)
 
         elif scene_name == "workshop":
-            from scenes.workshop import WorkshopScene
+            from scenes.core.workshop import WorkshopScene
             self.current_scene = WorkshopScene(self)
 
 
         elif scene_name == "battle":
 
-            from scenes.battle_fighting import FightingBattleScene
+            from scenes.core.battle_fighting import FightingBattleScene
 
             enemy = kwargs.get("enemy")
 
@@ -181,12 +181,12 @@ class Game:
 
             self.current_scene = FightingBattleScene(self, enemy, return_scene, background_name)
         elif scene_name == "forest":
-            from scenes.forest import ForestScene
+            from scenes.core.forest import ForestScene
             self.current_scene = ForestScene(self)
 
         elif scene_name == "forest_free":
             # Повернення після вільного бою у лісі
-            from scenes.forest import ForestScene
+            from scenes.core.forest import ForestScene
             self.scene_data["from_battle"] = "forest_free"
             self.current_scene = ForestScene(self)
 
@@ -199,115 +199,115 @@ class Game:
             self._do_change_scene("battle", enemy=enemy, return_scene="forest")
 
         elif scene_name == "tower":
-            from scenes.tower import TowerScene
+            from scenes.core.tower import TowerScene
             self.current_scene = TowerScene(self)
 
         elif scene_name == "tower_free":
-            from scenes.tower import TowerScene
+            from scenes.core.tower import TowerScene
             self.scene_data["from_battle"] = "tower_free"
             self.current_scene = TowerScene(self)
 
         elif scene_name == "ruins":
-            from scenes.ruins import RuinsScene
+            from scenes.core.ruins import RuinsScene
             self.current_scene = RuinsScene(self)
 
         elif scene_name == "ruins_free":
-            from scenes.ruins import RuinsScene
+            from scenes.core.ruins import RuinsScene
             self.scene_data["from_battle"] = "ruins_free"
             self.current_scene = RuinsScene(self)
 
         elif scene_name == "dragon":
-            from scenes.dragon import DragonScene
+            from scenes.core.dragon import DragonScene
             self.current_scene = DragonScene(self)
 
         elif scene_name == "victory":
-            from scenes.victory import VictoryScene
+            from scenes.core.victory import VictoryScene
             self.current_scene = VictoryScene(self)
 
         elif scene_name == "death":
-            from scenes.death import DeathScene
+            from scenes.core.death import DeathScene
             self.current_scene = DeathScene(self)
 
         elif scene_name == "tutorial":
-            from scenes.tutorial import TutorialScene
+            from scenes.core.tutorial import TutorialScene
             tutorial_data = kwargs.get("tutorial_data")
             next_scene = kwargs.get("next_scene", "village")
             self.current_scene = TutorialScene(self, tutorial_data, next_scene)
 
         elif scene_name == "stats":
-            from scenes.stats import StatsScene
+            from scenes.core.stats import StatsScene
             self.current_scene = StatsScene(self)
 
         elif scene_name == "inventory":
-            from scenes.inventory import InventoryScene
+            from scenes.core.inventory import InventoryScene
             self.current_scene = InventoryScene(self)
 
         elif scene_name == "battle_log":
-            from scenes.battle_log_scene import BattleLogScene
+            from scenes.core.battle_log_scene import BattleLogScene
             self.current_scene = BattleLogScene(self)
 
         elif scene_name == "skill_tree":
-            from scenes.skill_tree import SkillTreeScene
+            from scenes.core.skill_tree import SkillTreeScene
             self.current_scene = SkillTreeScene(self)
 
         elif scene_name == "admin":
-            from scenes.admin import AdminScene
+            from scenes.core.admin import AdminScene
             self.current_scene = AdminScene(self)
         elif scene_name == "achievements":
-            from scenes.achievements import AchievementsScene
+            from scenes.core.achievements import AchievementsScene
             self.current_scene = AchievementsScene(self)
 
         elif scene_name == "perks":
-            from scenes.perks import PerksScene
+            from scenes.core.perks import PerksScene
             self.current_scene = PerksScene(self)
 
         elif scene_name == "bestiary":
-            from scenes.bestiary import BestiaryScene
+            from scenes.core.bestiary import BestiaryScene
             self.current_scene = BestiaryScene(self)
 
         elif scene_name == "daily_quests":
-            from scenes.daily_quests_scene import DailyQuestsScene
+            from scenes.core.daily_quests_scene import DailyQuestsScene
             self.current_scene = DailyQuestsScene(self)
 
         elif scene_name == "perk_shop":
-            from scenes.perk_shop import PerkShopScene
+            from scenes.core.perk_shop import PerkShopScene
             self.current_scene = PerkShopScene(self)
 
         elif scene_name == "level_up":
-            from scenes.level_up import LevelUpScene
+            from scenes.core.level_up import LevelUpScene
             self.current_scene = LevelUpScene(self)
 
         elif scene_name == "world_map":
-            from scenes.world_map import WorldMapScene
+            from scenes.core.world_map import WorldMapScene
             self.current_scene = WorldMapScene(self)
 
         elif scene_name == "market":
-            from scenes.market import MarketScene
+            from scenes.core.market import MarketScene
             self.current_scene = MarketScene(self)
 
         elif scene_name == "elder":
-            from scenes.elder import ElderScene
+            from scenes.core.elder import ElderScene
             self.current_scene = ElderScene(self)
 
         elif scene_name == "forest_event":
-            from scenes.forest_event import ForestEventScene
+            from scenes.core.forest_event import ForestEventScene
             self.current_scene = ForestEventScene(self)
 
         elif scene_name == "onboarding":
-            from scenes.onboarding import OnboardingScene
+            from scenes.core.onboarding import OnboardingScene
             self.current_scene = OnboardingScene(self)
 
         elif scene_name == "mine":
-            from scenes.mine import MineScene
+            from scenes.core.mine import MineScene
             self.current_scene = MineScene(self)
 
         elif scene_name == "wanderer":
-            from scenes.wanderer import WandererScene
+            from scenes.core.wanderer import WandererScene
             self.current_scene = WandererScene(self)
 
         elif scene_name == "onboarding_reward_1":
             # Після першого бою — нагорода і майстерня
-            from scenes.onboarding import OnboardingScene, _RewardScene
+            from scenes.core.onboarding import OnboardingScene, _RewardScene
             scene = OnboardingScene(self)
             scene.stage = "reward_1"
             scene._give_reward_1()
@@ -316,7 +316,7 @@ class Game:
 
         elif scene_name == "onboarding_perk":
             # Після другого бою — XP + слабкі перки
-            from scenes.onboarding import BATTLE2_XP, WEAK_PERK_IDS
+            from scenes.core.onboarding import BATTLE2_XP, WEAK_PERK_IDS
             p = self.player
             xp_give = self.scene_data.pop("onboarding_battle2_xp", BATTLE2_XP)
             p.xp += xp_give
@@ -443,7 +443,7 @@ class Game:
 
     def show_achievement(self, achievement_id: str):
         """Показує сповіщення про досягнення."""
-        from scenes.achievement_notification import AchievementNotification
+        from scenes.core.achievement_notification import AchievementNotification
         self.achievement_notifications.append(AchievementNotification(achievement_id))
 
     def run(self):
@@ -493,7 +493,7 @@ class Game:
                             self.save_game()
                     elif event.key == pygame.K_F12:
                         if self.player:
-                            from scenes.admin import AdminScene
+                            from scenes.core.admin import AdminScene
                             self.push_scene("admin")
 
                 # Трансформуємо координати миші у віртуальний простір

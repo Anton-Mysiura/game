@@ -1,23 +1,10 @@
 """
-Сцени гри: всі екрани та їх логіка.
+scenes — всі екрани гри.
+
+  scenes/core/  — логіка (handle_event, update, on_enter)  ← програмісти
+  scenes/ui/    — малювання (*_renderer.py)                 ← дизайнери
+
+Зворотна сумісність збережена — імпортуй як раніше:
+    from scenes import VillageScene
 """
-
-from .base import Scene, SceneWithBackground, SceneWithButtons, DungeonScene, DialogScene
-from .admin import AdminScene
-from .achievements import AchievementsScene
-from .battle_fighting import FightingBattleScene
-from .battle_ui import BattleUIMixin
-from .battle_pause import BattlePauseMixin
-
-__all__ = [
-    'Scene',
-    'SceneWithBackground',
-    'SceneWithButtons',
-    'DungeonScene',
-    'DialogScene',
-    'AdminScene',
-    'AchievementsScene',
-    'FightingBattleScene',
-    'BattleUIMixin',
-    'BattlePauseMixin',
-]
+from .core import *
