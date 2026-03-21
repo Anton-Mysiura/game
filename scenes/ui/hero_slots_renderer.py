@@ -103,11 +103,11 @@ class HeroSlotsRenderer(BaseRenderer):
                 if slot_num in SLOT_UNLOCK_LEVELS:
                     req = SLOT_UNLOCK_LEVELS[slot_num]
                     cond = f"Рівень {req}"
-                    ok = self.player.level >= req
+                    ok = self.scene.player.level >= req
                 elif slot_num in SLOT_UNLOCK_GOLD:
                     cost = SLOT_UNLOCK_GOLD[slot_num]
                     cond = f"{cost} 🪙"
-                    ok = self.player.gold >= cost
+                    ok = self.scene.player.gold >= cost
                 else:
                     cond, ok = "???", False
                 cs = fs.render(cond, True, (120,200,80) if ok else (160,120,60))

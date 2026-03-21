@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/perks.py
 """
+import math
 from ui.constants import RARITY_COLORS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
@@ -46,8 +47,6 @@ class PerksRenderer(BaseRenderer):
 
     def _draw_ob_overlay(self, screen: pygame.Surface):
         """Покроковий туторіал по перках."""
-        import math
-        from ui.components import Panel
 
         STEPS = [
             (
@@ -165,7 +164,7 @@ class PerksRenderer(BaseRenderer):
         screen.blit(shadow, (cx - title.get_width() // 2 + 2, 57))
         screen.blit(title,  (cx - title.get_width() // 2,     55))
 
-        total = len(self.player.perks)
+        total = len(self.scene.player.perks)
         font_sub = assets.get_font(FONT_SIZE_SMALL)
         sub = font_sub.render(f"Всього отримано: {total}", True, COLOR_TEXT_DIM)
         screen.blit(sub, (cx - sub.get_width() // 2, 100))

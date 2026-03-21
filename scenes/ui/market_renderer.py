@@ -6,7 +6,10 @@
 
 Логіка гри: scenes/core/market.py
 """
+from game.market import REFRESH_SEC
+from scenes.core.market import CARD_H, CARD_W, GRID_Y, log
 from game.data import RARITY_COLOR
+from game.mutations import MUTATIONS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
@@ -47,12 +50,12 @@ class MarketRenderer(BaseRenderer):
         screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 32))
 
         font_g = assets.get_font(FONT_SIZE_NORMAL)
-        gold   = font_g.render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gold   = font_g.render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gold, (40, 38))
 
     def _draw_timer(self, screen):
         """Таймер до наступного оновлення — правий верхній кут."""
-        t    = self.player.market.time_to_refresh()
+        t    = self.scene.player.market.time_to_refresh()
         pct  = 1.0 - t / REFRESH_SEC
 
         font = assets.get_font(FONT_SIZE_SMALL)
@@ -76,13 +79,11 @@ class MarketRenderer(BaseRenderer):
     # ── Картки лотів ──────────────────────────────────────────────
 
     def _draw_lots(self, screen):
-        lots = self.player.market.lots
+        lots = self.scene.player.market.lots
         for i, lot in enumerate(lots):
             self._draw_card(screen, i, lot)
 
     def _draw_card(self, screen, idx: int, lot):
-        from game.data import ITEMS, MATERIALS, BLUEPRINTS
-        from game.mutations import get_mutation, MUTATIONS, RARITY_COLOR as MUT_RARITY_COLOR
 
         r        = self.scene._card_rect(idx)
         selected = idx == self.scene._sel
@@ -161,22 +162,22 @@ class MarketRenderer(BaseRenderer):
                     (px, py)); py += 17
 
         # ── Ціна ──────────────────────────────────────────────────
-        price_clr = COLOR_GOLD if self.player.gold >= lot.price else (220, 80, 80)
+        price_clr = COLOR_GOLD if self.scene.player.gold >= lot.price else (220, 80, 80)
         price_surf = assets.get_font(FONT_SIZE_NORMAL, bold=True).render(
             f"💰 {lot.price}", True, price_clr)
         screen.blit(price_surf, (r.right - price_surf.get_width() - 12,
                                   r.bottom - price_surf.get_height() - 10))
 
     def _draw_bottom_bar(self, screen):
-        if self.scene._sel < 0 or self.scene._sel >= len(self.player.market.lots):
+        if self.scene._sel < 0 or self.scene._sel >= len(self.scene.player.market.lots):
             return
-        lot = self.player.market.lots[self.scene._sel]
+        lot = self.scene.player.market.lots[self.scene._sel]
         if lot.sold:
             return
         font = assets.get_font(FONT_SIZE_SMALL)
-        can  = self.player.gold >= lot.price
+        can  = self.scene.player.gold >= lot.price
         hint = f"Натисни «Купити» — {lot.price} золота" if can \
-               else f"Не вистачає {lot.price - self.player.gold} золота"
+               else f"Не вистачає {lot.price - self.scene.player.gold} золота"
         clr  = (160, 220, 160) if can else (220, 100, 100)
         s    = font.render(hint, True, clr)
         screen.blit(s, (SCREEN_WIDTH // 2 - s.get_width() // 2, SCREEN_HEIGHT - 100))

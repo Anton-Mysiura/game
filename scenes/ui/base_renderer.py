@@ -1,84 +1,57 @@
 """
-Базовий клас Renderer.
+Базовий клас для всіх рендерерів.
 
-Кожен Renderer відповідає ТІЛЬКИ за малювання однієї сцени.
-Він нічого не змінює в стані гри — тільки читає і малює.
-
-Як використовувати:
-    У draw() сцени:
-        self._renderer.draw(screen)
-
-    Renderer отримує сцену через self.scene і читає з неї
-    будь-які атрибути: self.scene.player, self.scene.stage тощо.
+Кожен рендерер у scenes/ui/ успадковує цей клас.
+Надає доступ до сцени через self.scene і малює фон у draw().
 """
 import pygame
+from ui.constants import COLOR_BG
+from ui.assets import assets
 
 
 class BaseRenderer:
     """
-    Базовий клас рендерера сцени.
+    Базовий рендерер.
 
-    Параметри:
-        scene — посилання на об'єкт сцени (core).
-                Renderer читає стан сцени, але НІКОЛИ не змінює його.
+    Використання:
+        class MyRenderer(BaseRenderer):
+            def draw(self, screen):
+                super().draw(screen)   # малює фон
+                # ... твоє малювання
     """
 
     def __init__(self, scene):
-        self.scene  = scene
-        self.player = scene.player
-        self.game   = scene.game
+        self.scene = scene
 
     def draw(self, screen: pygame.Surface):
-        """Головний метод малювання. Перевизначається в підкласах."""
-        # Малюємо фон сцени якщо він є (SceneWithBackground)
-        if hasattr(self.scene, 'background') and self.scene.background:
+        """Малює фон сцени. Виклич super().draw(screen) на початку draw()."""
+
+        # 1. Якщо сцена вже намалювала фон через SceneWithBackground — нічого не робимо
+        if hasattr(self.scene, "background") and self.scene.background is not None:
             screen.blit(self.scene.background, (0, 0))
-        elif hasattr(self.scene, '_bg') and self.scene._bg:
-            screen.blit(self.scene._bg, (0, 0))
-        else:
-            from ui.constants import COLOR_BG
-            screen.fill(COLOR_BG)
+            return
 
-    # ── Утиліти, спільні для всіх рендерерів ─────────────────────
+        # 2. Фон з config/ui.py якщо налаштований
+        try:
+            scene_key = getattr(self.scene, "_bg_scene_key", None)
+            if scene_key is None:
+                name = type(self.scene).__name__.lower().replace("scene", "")
+                for key in ("main_menu", "village", "forest", "battle",
+                            "shop", "workshop", "inventory", "ruins",
+                            "tower", "mine", "world_map", "market",
+                            "elder", "hero_roulette", "hero_slots"):
+                    if key.replace("_", "") in name.replace("_", ""):
+                        scene_key = key
+                        break
 
-    def _overlay(self, screen: pygame.Surface,
-                 color: tuple = (0, 0, 0), alpha: int = 150):
-        """Напівпрозоре затемнення поверх всього."""
-        surf = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        surf.fill((*color[:3], alpha))
-        screen.blit(surf, (0, 0))
+            if scene_key:
+                bg = assets.get_background(scene_key,
+                                           (screen.get_width(), screen.get_height()))
+                if bg:
+                    screen.blit(bg, (0, 0))
+                    return
+        except Exception:
+            pass
 
-    def _draw_wrapped_text(self, screen: pygame.Surface, font,
-                           text: str, color,
-                           x: int, y: int, max_width: int,
-                           line_spacing: int = 4) -> int:
-        """
-        Малює текст з автоматичним переносом рядків.
-        Повертає Y-координату після останнього рядка.
-        Підтримує \\n для явного переносу.
-        """
-        line_h = font.get_height() + line_spacing
-        for paragraph in text.split("\n"):
-            words = paragraph.split()
-            line  = ""
-            for word in words:
-                test = (line + " " + word).strip()
-                if font.size(test)[0] <= max_width:
-                    line = test
-                else:
-                    if line:
-                        s = font.render(line, True, color)
-                        screen.blit(s, (x, y))
-                        y += line_h
-                    line = word
-            if line:
-                s = font.render(line, True, color)
-                screen.blit(s, (x, y))
-                y += line_h
-        return y
-
-    def _centered(self, screen: pygame.Surface, surf: pygame.Surface,
-                  y: int, x_offset: int = 0):
-        """Малює surf по центру екрану на висоті y."""
-        x = screen.get_width() // 2 - surf.get_width() // 2 + x_offset
-        screen.blit(surf, (x, y))
+        # 3. Fallback — суцільний фон
+        screen.fill(COLOR_BG)

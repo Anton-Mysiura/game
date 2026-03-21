@@ -55,7 +55,7 @@ class AchievementsRenderer(BaseRenderer):
         mouse_pos = pygame.mouse.get_pos()
 
         for i, (ach_id, ach) in enumerate(self.scene.achievement_list):
-            unlocked = ach_id in self.player.achievements_unlocked
+            unlocked = ach_id in self.scene.player.achievements_unlocked
             iy = i * (ITEM_H + ITEM_GAP)
             item_rect = pygame.Rect(0, iy, LIST_W - 16, ITEM_H)
 
@@ -108,7 +108,7 @@ class AchievementsRenderer(BaseRenderer):
 
         if self.scene.selected_index != -1 and self.scene.selected_index < len(self.scene.achievement_list):
             ach_id, ach = self.scene.achievement_list[self.scene.selected_index]
-            unlocked = ach_id in self.player.achievements_unlocked
+            unlocked = ach_id in self.scene.player.achievements_unlocked
 
             font_big_icon = assets.get_font(72)
             font_big_name = assets.get_font(FONT_SIZE_LARGE, bold=True)

@@ -55,9 +55,9 @@ class VictoryRenderer(BaseRenderer):
             "Дракон Морвет переможений!",
             "Темне Королівство врятовано!",
             "",
-            f"Герой {self.player.name} назавжди увійде в легенди.",
-            f"Фінальний рівень: {self.player.level}",
-            f"Зібрано золота: {self.player.gold} 🪙",
+            f"Герой {self.scene.player.name} назавжди увійде в легенди.",
+            f"Фінальний рівень: {self.scene.player.level}",
+            f"Зібрано золота: {self.scene.player.gold} 🪙",
         ]
 
         y = 280

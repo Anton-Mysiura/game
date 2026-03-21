@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/village.py
 """
+import math
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
@@ -30,7 +31,6 @@ class VillageRenderer(BaseRenderer):
         if not frame:
             return
 
-        import math
         float_y = math.sin(self.scene._char_float_t * 1.6) * 4
 
         # Праворуч від центральної панелі опису
@@ -104,7 +104,7 @@ class VillageRenderer(BaseRenderer):
         fs_cb = pygame.Rect(cx + 170, cy + 142, 24, 24)
         pygame.draw.rect(screen, (50, 50, 60), fs_cb, border_radius=4)
         pygame.draw.rect(screen, COLOR_GOLD, fs_cb, 2, border_radius=4)
-        if self.game.is_fullscreen:
+        if self.scene.game.is_fullscreen:
             screen.blit(font.render('✓', True, COLOR_GOLD), (fs_cb.x + 3, fs_cb.y - 2))
         hint_fs = font_sm.render('або F11', True, COLOR_TEXT_DIM)
         screen.blit(hint_fs, (cx + 170 + 30, cy + 147))
@@ -129,22 +129,22 @@ class VillageRenderer(BaseRenderer):
         self.scene.stats_panel.draw(screen)
 
         # HP бар
-        self.scene.hp_bar.draw(screen, self.player.hp, self.player.max_hp, "HP")
+        self.scene.hp_bar.draw(screen, self.scene.player.hp, self.scene.player.max_hp, "HP")
 
         # XP бар
-        self.scene.xp_bar.draw(screen, self.player.xp, self.player.xp_next, "XP")
+        self.scene.xp_bar.draw(screen, self.scene.player.xp, self.scene.player.xp_next, "XP")
 
         # Золото та рівень
         font = assets.get_font(FONT_SIZE_NORMAL)
-        gold_text = font.render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gold_text = font.render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gold_text, (50, 130))
 
-        level_text = font.render(f"⬆ Рівень {self.player.level}", True, COLOR_TEXT)
+        level_text = font.render(f"⬆ Рівень {self.scene.player.level}", True, COLOR_TEXT)
         screen.blit(level_text, (230, 130))
 
         # Час у грі
         font_small = assets.get_font(FONT_SIZE_SMALL)
-        pt = getattr(self.player, "total_playtime", 0.0)
+        pt = getattr(self.scene.player, "total_playtime", 0.0)
         total_s = int(pt)
         h = total_s // 3600; m = (total_s % 3600) // 60; s = total_s % 60
         if h > 0:
@@ -158,10 +158,10 @@ class VillageRenderer(BaseRenderer):
 
         # Атака та захист
         font_small = assets.get_font(FONT_SIZE_SMALL)
-        atk_text = font_small.render(f"⚔ {self.player.total_attack} ATK", True, COLOR_TEXT)
+        atk_text = font_small.render(f"⚔ {self.scene.player.total_attack} ATK", True, COLOR_TEXT)
         screen.blit(atk_text, (50, 160))
 
-        def_text = font_small.render(f"🛡 {self.player.total_defense} DEF", True, COLOR_TEXT)
+        def_text = font_small.render(f"🛡 {self.scene.player.total_defense} DEF", True, COLOR_TEXT)
         screen.blit(def_text, (200, 160))
 
         # Опис локації (по центру)
@@ -207,7 +207,6 @@ class VillageRenderer(BaseRenderer):
 
     def _draw_ob_forest_arrow(self, screen: pygame.Surface):
         """Стрілка + підсвітка кнопки 'Ліс' під час онбордингу."""
-        import math
         pulse = 0.5 + 0.5 * abs(math.sin(self.scene._ob_anim * 2.5))
         hl_col = tuple(int(c * pulse) for c in (255, 220, 60))
 
@@ -239,9 +238,9 @@ class VillageRenderer(BaseRenderer):
 
     def _draw_daily_badge(self, screen: pygame.Surface):
         """Бейдж кількості виконаних завдань на кнопці 'Завдання дня'."""
-        if not self.player:
+        if not self.scene.player:
             return
-        dq = self.player.daily_quests
+        dq = self.scene.player.daily_quests
         dq.refresh_if_needed()
         done  = sum(1 for q in dq.quests if q.done and not q.claimed)
         total = len(dq.quests)
@@ -263,7 +262,6 @@ class VillageRenderer(BaseRenderer):
 
     def _draw_weather(self, screen: pygame.Surface):
         """Смужка погоди і часу доби у верхньому правому куті."""
-        import math
         ICONS = {
             "ясно":    ("☀", (255, 220, 80)),
             "хмарно":  ("⛅", (180, 190, 200)),
@@ -293,7 +291,7 @@ class VillageRenderer(BaseRenderer):
 
     def _draw_last_battle(self, screen: pygame.Surface):
         """Міні-статистика останнього бою під панеллю статів."""
-        rec = getattr(self.game, "last_battle_record", None)
+        rec = getattr(self.scene.game, "last_battle_record", None)
         if not rec:
             return
         font  = assets.get_font(FONT_SIZE_SMALL)

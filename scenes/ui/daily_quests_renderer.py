@@ -38,14 +38,13 @@ class DailyQuestsRenderer(BaseRenderer):
         title = font_title.render("📋 Щоденні завдання", True, (220, 200, 100))
         screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, py + 18))
 
-        from datetime import date
         font_sub = pygame.font.Font(None, 22)
         today = font_sub.render(f"Оновлення: {date.today().strftime('%d.%m.%Y')}",
                                 True, (120, 110, 80))
         screen.blit(today, (SCREEN_WIDTH // 2 - today.get_width() // 2, py + 58))
 
         # Квести
-        quests = self.player.daily_quests.quests
+        quests = self.scene.player.daily_quests.quests
         font_name = pygame.font.Font(None, 30)
         font_desc = pygame.font.Font(None, 22)
         font_prog = pygame.font.Font(None, 24)

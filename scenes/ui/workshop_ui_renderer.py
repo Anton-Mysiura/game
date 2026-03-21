@@ -4,9 +4,35 @@
 Дизайнер змінює цей файл.
 Логіка: scenes/core/workshop.py + scenes/core/workshop_ui.py
 """
-from game.data import BLUEPRINTS
-from scenes.workshop import SMELT_RECIPES
-from scenes.workshop import queue_color
+import math
+import pygame
+from scenes.ui.base_renderer import BaseRenderer
+from ui.constants import *
+from ui.assets import assets
+from ui.components import Button, Panel, ProgressBar, TextBox
+from ui.icons import draw_icon
+from game.data import (MATERIALS, ITEMS, BLUEPRINTS, OwnedBlueprint,
+                       BP_RARITY_COLORS, BP_RARITY_NAMES_UA, RARITY_COLOR)
+from game.free_craft import (calc_item_stats, calc_bonuses, calc_item_value,
+                              generate_item_name, MIN_TOTAL_MATS, calc_craft_time)
+from game.crafting_queue import (fmt_time, get_craft_time,
+                                 dismantle_cost, dismantle_time,
+                                 dismantle_preview, DISMANTLE_RETURN, _item_tier)
+from game.mutations import get_mutation, MUTATIONS, RARITY_NAME_UA
+from game.save_manager import _deserialize_item
+from scenes.core.workshop import (
+    HEADER_Y, TABS_Y, TABS_H, CONTENT_Y, EXIT_Y, EXIT_H,
+    QUEUE_H, QUEUE_Y, CONTENT_H, _MARGIN, ROW_H, LIST_X, LIST_W,
+    LIST_Y, VISIBLE, INFO_X, INFO_W, QUEUE_X, QUEUE_W,
+    _FC_LEFT_W, _FC_SWITCHER_H, FC_SWITCHER_Y, FC_SLOTS_X, FC_SLOTS_Y,
+    FC_SLOT_GAP, FC_SLOT_W, FC_SLOT_H, FC_MAT_X, FC_MAT_W,
+    FC_MAT_HDR_Y, FC_MAT_SUB_Y, FC_MAT_Y, FC_ROW_H, FC_VISIBLE,
+    FC_PREVIEW_Y, FC_PREVIEW_H, FC_FORGE_X, FC_FORGE_Y, FC_FORGE_W,
+    FC_FORGE_H, SMELT_RECIPES, queue_color,
+)
+
+_SW = SCREEN_WIDTH
+
 import math
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
@@ -82,7 +108,6 @@ class WorkshopRenderer(BaseRenderer):
 
     def _draw_wow_overlay(self, screen: pygame.Surface):
         """Спецефект при отриманні першої скрафтованої зброї."""
-        import math
         item = self.scene._wow_item
         if not item:
             return
@@ -144,7 +169,6 @@ class WorkshopRenderer(BaseRenderer):
         else:
             stat_txt = ""
 
-        from game.mutations import get_mutation
         mut = get_mutation(item)
         name_col = mut.color if mut else (255, 215, 60)
 
@@ -178,7 +202,6 @@ class WorkshopRenderer(BaseRenderer):
 
     def _draw_ob_overlay(self, screen: pygame.Surface):
         """Покроковий туторіал майстерні."""
-        import math
         STEPS = [
             {"title": "📜 Крок 1: Вибери кресленик",
              "text": ["Вгорі - список кресленників.",
@@ -318,7 +341,6 @@ class WorkshopRenderer(BaseRenderer):
 
     def _draw_fc_type_switcher(self, screen, mp):
         """Список кресленників для вільного крафту."""
-        from game.data import BP_RARITY_COLORS
         fn  = assets.get_font(FONT_SIZE_SMALL, bold=True)
         fsm = assets.get_font(FONT_SIZE_SMALL)
         px  = FC_SLOTS_X
@@ -340,7 +362,7 @@ class WorkshopRenderer(BaseRenderer):
             hdr = fn.render("📜 Вибери кресленик →", True, COLOR_TEXT_DIM)
         screen.blit(hdr, (px + 8, FC_SWITCHER_Y + 6))
 
-        bps    = [o for o in self.player.blueprints
+        bps    = [o for o in self.scene.player.blueprints
                   if o.blueprint.result_type in ("weapon","armor","tool")
                   and not o.is_broken]
         scroll = self.scene._fc_bp_scroll
@@ -421,7 +443,6 @@ class WorkshopRenderer(BaseRenderer):
             screen.blit(s2, (sx + 6, iy))
             pygame.draw.rect(screen, (80, 65, 35), (sx + 6, iy, FC_SLOT_W - 12, 26), 1, border_radius=4)
 
-            from game.data import RARITY_COLOR
             rc = RARITY_COLOR.get(mat.rarity, COLOR_TEXT)
             draw_icon(screen, mid, mat.icon, sx + 12, iy + 3, size=20)
             screen.blit(font_sm.render(mat.name, True, rc), (sx + 36, iy + 5))
@@ -472,7 +493,7 @@ class WorkshopRenderer(BaseRenderer):
         mat_list = self.scene._fc_visible_mats()
         # Повний список для скролу
         slot = self.scene._fc_active
-        all_mats_full = [(mid, qty) for mid, qty in self.player.materials.items()
+        all_mats_full = [(mid, qty) for mid, qty in self.scene.player.materials.items()
                          if qty > 0 and (slot != "blade" or MATERIALS.get(mid) and MATERIALS[mid].is_metal)]
 
         if not all_mats_full:
@@ -491,7 +512,6 @@ class WorkshopRenderer(BaseRenderer):
             r  = pygame.Rect(FC_MAT_X, ry, FC_MAT_W, FC_ROW_H - 3)
             hov = r.collidepoint(mp) or (i == self.scene._fc_hovered)
 
-            from game.data import RARITY_COLOR
             rc = RARITY_COLOR.get(mat.rarity, COLOR_TEXT)
 
             bg_col = (50, 42, 22, 210) if hov else (25, 20, 12, 170)
@@ -569,8 +589,7 @@ class WorkshopRenderer(BaseRenderer):
         screen.blit(name_s, (px + 12, py + 8))
 
         # Час крафту
-        from game.free_craft import calc_craft_time as fc_time
-        time_s = font_sm.render(f"⏱ {fmt_time(fc_time(r))}", True, (160, 160, 200))
+        time_s = font_sm.render(f"⏱ {fmt_time(calc_craft_time(r))}", True, (160, 160, 200))
         screen.blit(time_s, (px + pw - time_s.get_width() - 12, py + 8))
 
         # Статистика
@@ -618,8 +637,8 @@ class WorkshopRenderer(BaseRenderer):
         """Кнопка Викувати."""
         r       = self.scene._fc_recipe
         can     = r.is_valid() and not r.blade.is_empty()
-        ok, _   = r.can_afford(self.player.materials) if can else (False, "")
-        can_all = can and ok and len(self.player.crafting_queue.orders) < self.player.crafting_queue.MAX_SLOTS
+        ok, _   = r.can_afford(self.scene.player.materials) if can else (False, "")
+        can_all = can and ok and len(self.scene.player.crafting_queue.orders) < self.scene.player.crafting_queue.MAX_SLOTS
 
         btn_r   = pygame.Rect(FC_FORGE_X, FC_FORGE_Y, FC_FORGE_W, FC_FORGE_H)
         hov     = btn_r.collidepoint(mp)
@@ -643,15 +662,14 @@ class WorkshopRenderer(BaseRenderer):
     # ── Список крафтів ────────────────────────────────────────────
 
     def _draw_craft_list(self, screen):
-        from game.data import BP_RARITY_COLORS, BP_RARITY_NAMES_UA
         font    = assets.get_font(FONT_SIZE_NORMAL)
         font_sm = assets.get_font(FONT_SIZE_SMALL)
         mp      = pygame.mouse.get_pos()
         # Сортуємо: що можна зробити - вгору, потім за рідкістю
         RARITY_ORDER = ["legendary", "epic", "rare", "uncommon", "common"]
-        raw_bps = self.player.blueprints
+        raw_bps = self.scene.player.blueprints
         bps = sorted(raw_bps, key=lambda ob: (
-            0 if ob.can_craft(self.player.materials) else 1,
+            0 if ob.can_craft(self.scene.player.materials) else 1,
             RARITY_ORDER.index(ob.rarity) if ob.rarity in RARITY_ORDER else 5,
             ob.blueprint.result_name,
         ))
@@ -667,7 +685,7 @@ class WorkshopRenderer(BaseRenderer):
         for i, ob in enumerate(bps[self.scene.scroll: self.scene.scroll + VISIBLE]):
             bp  = ob.blueprint
             r   = pygame.Rect(LIST_X, LIST_Y + i * ROW_H, LIST_W, ROW_H - 4)
-            can = ob.can_craft(self.player.materials)
+            can = ob.can_craft(self.scene.player.materials)
             rar_clr = BP_RARITY_COLORS.get(ob.rarity, (180, 180, 180))
 
             bg_clr = (80, 65, 20, 210) if i == self.scene.sel else \
@@ -725,7 +743,7 @@ class WorkshopRenderer(BaseRenderer):
             r    = pygame.Rect(LIST_X, LIST_Y + i * ROW_H, LIST_W, ROW_H - 4)
             fm   = MATERIALS.get(from_mat)
             tm   = MATERIALS.get(to_mat)
-            have = self.player.materials.get(from_mat, 0)
+            have = self.scene.player.materials.get(from_mat, 0)
             can  = have >= from_qty
 
             bg_clr = (80, 65, 20, 210) if i == self.scene.sel else \
@@ -748,8 +766,7 @@ class WorkshopRenderer(BaseRenderer):
     # ── Черга замовлень ───────────────────────────────────────────
 
     def _draw_queue_panel(self, screen):
-        import time as time_module
-        q = self.player.crafting_queue
+        q = self.scene.player.crafting_queue
 
         # Фон панелі
         qsurf = pygame.Surface((QUEUE_W, QUEUE_H), pygame.SRCALPHA)
@@ -816,7 +833,6 @@ class WorkshopRenderer(BaseRenderer):
                 # Мутація якщо є
                 mut_id = order.item_data.get("mutation", "")
                 if mut_id:
-                    from game.mutations import MUTATIONS, RARITY_COLOR
                     mut = MUTATIONS.get(mut_id)
                     if mut:
                         m_s = font.render(f"✦ {mut.icon} {mut.name}", True,
@@ -832,7 +848,7 @@ class WorkshopRenderer(BaseRenderer):
                                       sy + sh // 2 - 8))
 
         # Кнопка "Забрати" - тільки якщо є готові
-        dq = self.player.dismantle_queue
+        dq = self.scene.player.dismantle_queue
         has_any_done = has_done or any(o.is_done() for o in dq.orders)
         if has_any_done:
             self.scene.collect_btn.enabled = True
@@ -851,7 +867,7 @@ class WorkshopRenderer(BaseRenderer):
     # ── Інфо-панелі ───────────────────────────────────────────────
 
     def _draw_craft_info(self, screen):
-        bps     = self.player.blueprints
+        bps     = self.scene.player.blueprints
         abs_idx = self.scene.scroll + self.scene.sel
         if self.scene.sel == -1 or abs_idx >= len(bps):
             hint = assets.get_font(FONT_SIZE_SMALL).render(
@@ -861,7 +877,7 @@ class WorkshopRenderer(BaseRenderer):
         # Сортуємо так само як у списку щоб індекс відповідав
         RARITY_ORDER = ["legendary", "epic", "rare", "uncommon", "common"]
         sorted_bps = sorted(bps, key=lambda ob: (
-            0 if ob.can_craft(self.player.materials) else 1,
+            0 if ob.can_craft(self.scene.player.materials) else 1,
             RARITY_ORDER.index(ob.rarity) if ob.rarity in RARITY_ORDER else 5,
             ob.blueprint.result_name,
         ))
@@ -870,7 +886,6 @@ class WorkshopRenderer(BaseRenderer):
         self._draw_bp_detail(screen, sorted_bps[abs_idx])
 
     def _draw_bp_detail(self, screen, ob):
-        from game.data import BP_RARITY_COLORS, BP_RARITY_NAMES_UA
         bp = ob.blueprint
         panel_h = QUEUE_Y - LIST_Y - 12
         surf = pygame.Surface((INFO_W, panel_h), pygame.SRCALPHA)
@@ -922,14 +937,14 @@ class WorkshopRenderer(BaseRenderer):
         for mat_id, qty in bp.recipe.items():
             mat  = MATERIALS.get(mat_id)
             if not mat: continue
-            have = self.player.materials.get(mat_id, 0)
+            have = self.scene.player.materials.get(mat_id, 0)
             clr  = (100, 220, 100) if have >= qty else COLOR_ERROR
             draw_icon(screen, mat_id, mat.icon, px + 4, py, size=16)
             screen.blit(fsm.render(f" {mat.name}: {have}/{qty}", True, clr), (px + 22, py)); py += 16
 
         # Статус
-        can = ob.can_craft(self.player.materials)
-        q   = self.player.crafting_queue
+        can = ob.can_craft(self.scene.player.materials)
+        q   = self.scene.player.crafting_queue
         py += 4
         if ob.is_broken:
             screen.blit(fsm.render("💥 Кресленик зламаний!", True, COLOR_ERROR), (px, py))
@@ -955,7 +970,7 @@ class WorkshopRenderer(BaseRenderer):
         from_mat, from_qty, to_mat, to_qty, label = SMELT_RECIPES[self.scene.sel]
         fm   = MATERIALS.get(from_mat)
         tm   = MATERIALS.get(to_mat)
-        have = self.player.materials.get(from_mat, 0)
+        have = self.scene.player.materials.get(from_mat, 0)
 
         panel_h = QUEUE_Y - LIST_Y - 12
         surf = pygame.Surface((INFO_W, panel_h), pygame.SRCALPHA)
@@ -990,7 +1005,7 @@ class WorkshopRenderer(BaseRenderer):
 
     def _draw_scrollbar(self, screen):
         if self.scene.mode != "craft": return
-        total = len(self.player.blueprints)
+        total = len(self.scene.player.blueprints)
         if total <= VISIBLE: return
         bar_h   = VISIBLE * ROW_H
         bar_x   = LIST_X + LIST_W + 6
@@ -1021,8 +1036,6 @@ class WorkshopRenderer(BaseRenderer):
     # ── Список розбирання ─────────────────────────────────────────
 
     def _draw_dismantle_list(self, screen):
-        from game.crafting_queue import dismantle_cost, dismantle_time, fmt_time, _item_tier
-        from game.mutations import get_mutation, RARITY_COLOR
         font    = assets.get_font(FONT_SIZE_NORMAL)
         font_sm = assets.get_font(FONT_SIZE_SMALL)
         mp      = pygame.mouse.get_pos()
@@ -1061,14 +1074,13 @@ class WorkshopRenderer(BaseRenderer):
             # Ціна і час
             cost = dismantle_cost(item)
             t    = fmt_time(dismantle_time(item))
-            cost_clr = COLOR_GOLD if self.player.gold >= cost else COLOR_ERROR
+            cost_clr = COLOR_GOLD if self.scene.player.gold >= cost else COLOR_ERROR
             right_txt = f"💰{cost}  ⏱{t}"
             rs = font_sm.render(right_txt, True, cost_clr)
             screen.blit(rs, (r.right - rs.get_width() - 10, r.y + 8))
 
             # Шанс повернення
             tier = _item_tier(item)
-            from game.crafting_queue import DISMANTLE_RETURN
             pct  = int(DISMANTLE_RETURN[tier] * 100)
             screen.blit(font_sm.render(f"~{pct}% матеріалів назад", True, (160, 160, 160)),
                         (r.x + 14, r.y + 36))
@@ -1081,10 +1093,6 @@ class WorkshopRenderer(BaseRenderer):
     # ── Інфо-панель розбирання ────────────────────────────────────
 
     def _draw_dismantle_info(self, screen):
-        from game.crafting_queue import (dismantle_cost, dismantle_time, fmt_time,
-                                         dismantle_preview, _item_tier, DISMANTLE_RETURN)
-        from game.mutations import get_mutation, RARITY_COLOR, RARITY_NAME_UA
-        from game.data import MATERIALS
 
         items   = self.scene._dismantle_items()
         abs_idx = self.scene.scroll + self.scene.sel
@@ -1136,7 +1144,7 @@ class WorkshopRenderer(BaseRenderer):
         # Умови розбирання
         py += 6
         screen.blit(fsm.render(f"⏱ Час: {fmt_time(dur)}", True, (160, 180, 220)), (px, py)); py += 18
-        cost_clr = COLOR_GOLD if self.player.gold >= cost else COLOR_ERROR
+        cost_clr = COLOR_GOLD if self.scene.player.gold >= cost else COLOR_ERROR
         screen.blit(fsm.render(f"💰 Вартість: {cost} золота", True, cost_clr), (px, py)); py += 18
         screen.blit(fsm.render(f"📊 Шанс повернення: ~{pct}% кожного", True, (180, 160, 120)),
                     (px, py)); py += 20
@@ -1156,20 +1164,18 @@ class WorkshopRenderer(BaseRenderer):
                                    True, COLOR_TEXT_DIM), (px, py)); py += 18
 
         # Кнопка
-        dq  = self.player.dismantle_queue
-        can = (self.player.gold >= cost and len(dq.orders) < dq.MAX_SLOTS)
+        dq  = self.scene.player.dismantle_queue
+        can = (self.scene.player.gold >= cost and len(dq.orders) < dq.MAX_SLOTS)
         if len(dq.orders) >= dq.MAX_SLOTS:
             screen.blit(fsm.render("⚠ Черга розбирання повна!", True, COLOR_ERROR), (px, py))
-        elif self.player.gold < cost:
-            screen.blit(fsm.render(f"⚠ Не вистачає {cost - self.player.gold} 🪙", True, COLOR_ERROR),
+        elif self.scene.player.gold < cost:
+            screen.blit(fsm.render(f"⚠ Не вистачає {cost - self.scene.player.gold} 🪙", True, COLOR_ERROR),
                         (px, py))
         self.scene.action_btn.enabled = can
         self.scene.action_btn.draw(screen)
 
     def _draw_dismantle_queue_slots(self, screen, dq):
         """Компактні слоти черги розбирання - правий бік панелі черги."""
-        import math as _math
-        from game.crafting_queue import fmt_time
         font = assets.get_font(FONT_SIZE_SMALL)
 
         base_x = QUEUE_X + QUEUE_W // 2 + 30
@@ -1193,8 +1199,6 @@ class WorkshopRenderer(BaseRenderer):
             screen.blit(font.render(f"{icon} {name}", True, COLOR_TEXT_DIM), (sx + 6, sy + 6))
 
             # Прогрес-бар
-            from game.crafting_queue import dismantle_time
-            from game.save_manager import _deserialize_item
             item = _deserialize_item(order.item_data)
             total = dismantle_time(item) if item else 60
             left  = order.seconds_left()
@@ -1205,7 +1209,7 @@ class WorkshopRenderer(BaseRenderer):
                 pygame.draw.rect(screen, clr, (sx + 6, sy + 28, int(bw * pct), 8), border_radius=3)
 
             if done:
-                alpha = int(180 + 75 * _math.sin(self.scene._anim_t * 4))
+                alpha = int(180 + 75 * math.sin(self.scene._anim_t * 4))
                 ds = font.render("✓ ГОТОВО!", True, (100, 255, 100))
                 ds.set_alpha(alpha)
                 screen.blit(ds, (sx + slot_w // 2 - ds.get_width() // 2, sy + 42))

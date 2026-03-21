@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/main_menu.py
 """
+import math
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
@@ -43,7 +44,6 @@ class MainMenuRenderer(BaseRenderer):
 
     def _draw_menu_characters(self, screen: pygame.Surface):
         """Малює всіх 4 персонажів по боках меню."""
-        import math
         for i, c in enumerate(self.scene._chars):
             if not c["ctrl"]:
                 continue

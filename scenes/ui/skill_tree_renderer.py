@@ -41,9 +41,9 @@ class SkillTreeRenderer(BaseRenderer):
         title = font_big.render("🌳 Дерево навичок", True, COLOR_GOLD)
         screen.blit(title, (60, 45))
 
-        pts_color = (100, 220, 100) if self.player.skill_points > 0 else COLOR_TEXT_DIM
+        pts_color = (100, 220, 100) if self.scene.player.skill_points > 0 else COLOR_TEXT_DIM
         pts = font_sm.render(
-            f"Очки навичок: {self.player.skill_points}", True, pts_color)
+            f"Очки навичок: {self.scene.player.skill_points}", True, pts_color)
         screen.blit(pts, (SCREEN_WIDTH - 280, 52))
 
     def _draw_branches(self, screen):
@@ -65,8 +65,8 @@ class SkillTreeRenderer(BaseRenderer):
                 cx1, cy1 = _node_center(branch_id, i + 1)
                 cx2, cy2 = _node_center(branch_id, i + 2)
 
-                n1_done = nodes[i]     in self.player.skill_nodes
-                n2_done = nodes[i + 1] in self.player.skill_nodes
+                n1_done = nodes[i]     in self.scene.player.skill_nodes
+                n2_done = nodes[i + 1] in self.scene.player.skill_nodes
 
                 line_clr = clr if (n1_done and n2_done) else (70, 65, 60)
                 line_w   = 4 if (n1_done and n2_done) else 2
@@ -139,7 +139,7 @@ class SkillTreeRenderer(BaseRenderer):
         if state == "unlocked":
             lines.append(("✓ Вже вивчено", assets.get_font(FONT_SIZE_SMALL), (100, 220, 100)))
         elif state == "available":
-            if self.player.skill_points > 0:
+            if self.scene.player.skill_points > 0:
                 lines.append(("Натисни щоб вибрати", assets.get_font(FONT_SIZE_SMALL), (200, 180, 100)))
             else:
                 lines.append(("Немає очок навичок", assets.get_font(FONT_SIZE_SMALL), (200, 80, 80)))
@@ -179,5 +179,5 @@ class SkillTreeRenderer(BaseRenderer):
         state = self.scene._node_state(self.scene._selected_node)
         if state != "available":
             return
-        self.scene._confirm_btn.enabled = self.player.skill_points > 0
+        self.scene._confirm_btn.enabled = self.scene.player.skill_points > 0
         self.scene._confirm_btn.draw(screen)

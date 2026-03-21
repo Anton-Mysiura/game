@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/forest_event.py
 """
+from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 from ui.constants import *
@@ -111,7 +112,6 @@ class ForestEventRenderer(BaseRenderer):
             loot_y += 34
 
         for mat_id, qty in res.materials_gained.items():
-            from game.data import MATERIALS
             mat = MATERIALS.get(mat_id)
             name = mat.name if mat else mat_id
             s = font_loot.render(f"+ {name} ×{qty}", True, (180, 220, 130))

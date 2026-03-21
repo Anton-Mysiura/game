@@ -61,14 +61,14 @@ class MineRenderer(BaseRenderer):
         font_sm    = assets.get_font(FONT_SIZE_SMALL)
         title = font_title.render("⛏ Шахта", True, COLOR_GOLD)
         screen.blit(title, (PANEL_X, 50))
-        gold = font_sm.render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gold = font_sm.render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gold, (SCREEN_WIDTH - gold.get_width() - 40, 55))
 
         # Інструменти гравця
         has_pick   = self.scene._has_pickaxe()
         has_shovel = self.scene._has_shovel()
         has_broken = any(getattr(i, "item_id", "") == BROKEN_PICKAXE_ID
-                         for i in self.player.inventory)
+                         for i in self.scene.player.inventory)
         tools_x = PANEL_X
         tools_y = 60
         draw_icon(screen, PICKAXE_ID,        "⛏", tools_x,      tools_y, size=24,

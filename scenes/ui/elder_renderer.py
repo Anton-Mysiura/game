@@ -50,15 +50,15 @@ class ElderRenderer(BaseRenderer):
         fh = assets.get_font(FONT_SIZE_LARGE, bold=True)
         screen.blit(fh.render("🧓 Голова села Радомир", True, COLOR_GOLD), (LIST_X, 38))
         fs = assets.get_font(FONT_SIZE_SMALL)
-        p  = self.player
+        p  = self.scene.player
         completable_count = len(get_completable_quests(p))
         if completable_count:
             pulse = 0.6 + 0.4 * math.sin(self.scene._anim_t * 3)
             clr = tuple(int(c * pulse) for c in CLR_COMPLETABLE)
             txt = fs.render(f"✦ {completable_count} квест(и) готові до здачі!", True, clr)
         else:
-            active = len(self.player.quests_active)
-            done   = len(self.player.quests_done)
+            active = len(self.scene.player.quests_active)
+            done   = len(self.scene.player.quests_done)
             txt    = fs.render(f"Активних: {active}   Виконаних: {done}", True, COLOR_TEXT_DIM)
         screen.blit(txt, (LIST_X, 80))
 
@@ -67,8 +67,7 @@ class ElderRenderer(BaseRenderer):
 
     def _draw_reputation_bar(self, screen):
         """Мала панель репутації у верхньому правому куті."""
-        from game.reputation import get_tier, get_next_tier
-        rep   = getattr(self.player, "reputation", 0)
+        rep   = getattr(self.scene.player, "reputation", 0)
         tier  = get_tier(rep)
         nxt   = get_next_tier(rep)
         fs    = assets.get_font(FONT_SIZE_SMALL)
@@ -222,7 +221,7 @@ class ElderRenderer(BaseRenderer):
 
         # Прогрес якщо активний
         if status in ("active", "completable"):
-            done = quest.complete_cond(self.player)
+            done = quest.complete_cond(self.scene.player)
             prog_clr = CLR_COMPLETABLE if done else CLR_ACTIVE
             prog_txt = "✓ Виконано — здай квест!" if done else "● В процесі..."
             screen.blit(fsm.render(prog_txt, True, prog_clr), (px, py)); py += 22

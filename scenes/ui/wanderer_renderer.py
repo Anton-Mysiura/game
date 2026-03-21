@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/wanderer.py
 """
+from game.data import MATERIALS
+from game.data import BLUEPRINTS
 from ui.constants import RARITY_COLORS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
@@ -34,7 +36,7 @@ class WandererRenderer(BaseRenderer):
         if self.scene._sel >= 0 and self.scene._sel < len(self.scene._w.lots):
             lot = self.scene._w.lots[self.scene._sel]
             if not lot.sold:
-                can = self.player.gold >= lot.price
+                can = self.scene.player.gold >= lot.price
                 self.scene.buy_btn.text    = f"💰 Купити  {lot.price}🪙"
                 self.scene.buy_btn.enabled = can
             else:
@@ -57,7 +59,7 @@ class WandererRenderer(BaseRenderer):
         screen.blit(fh.render("🧳 Мандрівний торговець", True, col), (CARDS_X, 50))
         screen.blit(fs.render("Рідкісні товари — лише сьогодні!", True, COLOR_TEXT_DIM),
                     (CARDS_X, 90))
-        gold = fs.render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gold = fs.render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gold, (SCREEN_WIDTH - gold.get_width() - 40, 55))
 
     def _draw_lots(self, screen):
@@ -99,14 +101,13 @@ class WandererRenderer(BaseRenderer):
             screen.blit(fn.render(name, True, rar_col), (r.x + 48, r.y + 10))
 
             # Рідкість
-            from game.data import BP_RARITY_NAMES_UA
             rar_ua = {"common":"Звичайний","uncommon":"Незвичайний",
                       "rare":"Рідкісний","epic":"Епічний","legendary":"Легендарний"}
             screen.blit(fsm.render(rar_ua.get(lot.rarity, ""), True, rar_col),
                         (r.x + 48, r.y + 34))
 
             # Ціна
-            price_col = COLOR_GOLD if self.player.gold >= lot.price else COLOR_ERROR
+            price_col = COLOR_GOLD if self.scene.player.gold >= lot.price else COLOR_ERROR
             p_s = fn.render(f"{lot.price}🪙", True, price_col)
             screen.blit(p_s, (r.right - p_s.get_width() - 10, r.bottom - p_s.get_height() - 8))
 
@@ -121,13 +122,12 @@ class WandererRenderer(BaseRenderer):
         iy  = CARDS_Y
 
         if lot.item_type == "blueprint":
-            from game.data import BLUEPRINTS, MATERIALS
             bp = BLUEPRINTS.get(lot.bp_id)
             if bp:
                 lines = [f"📜 Кресленик: {bp.result_name}", f"Рецепт:"]
                 for mat_id, qty in bp.recipe.items():
                     mat  = MATERIALS.get(mat_id)
-                    have = self.player.materials.get(mat_id, 0)
+                    have = self.scene.player.materials.get(mat_id, 0)
                     clr_m = (100,220,100) if have >= qty else COLOR_ERROR
                     lines.append(f"  {mat.icon if mat else '?'} {mat.name if mat else mat_id} {have}/{qty}")
                 for line in lines:

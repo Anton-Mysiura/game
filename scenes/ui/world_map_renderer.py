@@ -165,7 +165,7 @@ class WorldMapRenderer(BaseRenderer):
 
         # Рекомендований рівень
         font_lvl = assets.get_font(FONT_SIZE_SMALL)
-        lvl_col  = COLOR_HP if self.player.level >= loc["rec_level"] else (220, 80, 80)
+        lvl_col  = COLOR_HP if self.scene.player.level >= loc["rec_level"] else (220, 80, 80)
         lvl_surf = font_lvl.render(f"Рів. {loc['rec_level']}+", True, lvl_col)
         screen.blit(lvl_surf, (x - lvl_surf.get_width() // 2, y + r + 24))
 
@@ -182,7 +182,6 @@ class WorldMapRenderer(BaseRenderer):
         if not loc or not self.scene._is_unlocked(loc):
             return
 
-        from game.location_bonuses import LOCATION_BONUSES
         bonus = LOCATION_BONUSES.get(loc["id"])
         visited = self.scene._is_visited(loc["id"])
 
@@ -225,8 +224,7 @@ class WorldMapRenderer(BaseRenderer):
 
     def _draw_active_bonuses(self, screen: pygame.Surface):
         """Панель активних бонусів від локацій — знизу ліворуч."""
-        from game.location_bonuses import get_active_bonuses
-        bonuses = get_active_bonuses(self.player.locations_visited)
+        bonuses = get_active_bonuses(self.scene.player.locations_visited)
         if not bonuses:
             return
 
@@ -272,7 +270,7 @@ class WorldMapRenderer(BaseRenderer):
         # HP гравця
         ly += 10
         hp_text = font.render(
-            f"❤ {self.player.hp}/{self.player.total_max_hp}  ⭐ Рів. {self.player.level}",
+            f"❤ {self.scene.player.hp}/{self.scene.player.total_max_hp}  ⭐ Рів. {self.scene.player.level}",
             True, COLOR_HP
         )
         screen.blit(hp_text, (lx, ly))

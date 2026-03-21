@@ -56,12 +56,12 @@ class PerkShopRenderer(BaseRenderer):
         screen.blit(shadow, (cx - title.get_width() // 2 + 2, 52))
         screen.blit(title,  (cx - title.get_width() // 2,     50))
 
-        gold_surf = font_large.render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gold_surf = font_large.render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gold_surf, (cx - gold_surf.get_width() // 2, 120))
 
         # ── Кнопка «Бонусні картки» ──
         extra_rect = self.scene._extra_btn_rect()
-        can_extra  = self.player.gold >= self.scene._extra_cost
+        can_extra  = self.scene.player.gold >= self.scene._extra_cost
         self._draw_shop_btn(
             screen, extra_rect, can_extra,
             "🃏 Бонусні картки",
@@ -72,7 +72,7 @@ class PerkShopRenderer(BaseRenderer):
 
         # ── Кнопка «Замінити перк» ──
         reroll_rect = self.scene._reroll_btn_rect()
-        can_reroll  = self.player.gold >= self.scene._reroll_cost and bool(self.player.perks)
+        can_reroll  = self.scene.player.gold >= self.scene._reroll_cost and bool(self.scene.player.perks)
         self._draw_shop_btn(
             screen, reroll_rect, can_reroll,
             "🔄 Замінити перк",
@@ -82,8 +82,8 @@ class PerkShopRenderer(BaseRenderer):
         )
 
         # Прогрес знижок / підвищень
-        next_extra  = extra_cost(self.player.perk_shop_extra_bought + 1)
-        next_reroll = reroll_cost(self.player.perk_shop_reroll_bought + 1)
+        next_extra  = extra_cost(self.scene.player.perk_shop_extra_bought + 1)
+        next_reroll = reroll_cost(self.scene.player.perk_shop_reroll_bought + 1)
         hint = font_sm.render(
             f"Наст. бонус: {next_extra}💰   Наст. заміна: {next_reroll}💰",
             True, COLOR_TEXT_DIM
@@ -125,8 +125,8 @@ class PerkShopRenderer(BaseRenderer):
         screen.blit(cs, (rect.centerx - cs.get_width() // 2, rect.bottom - 50))
 
         # "Недостатньо" якщо не може купити
-        if not enabled and self.player.perks or not enabled:
-            if not self.player.perks and "Замін" in title:
+        if not enabled and self.scene.player.perks or not enabled:
+            if not self.scene.player.perks and "Замін" in title:
                 no_s = font_desc.render("Немає перків для заміни", True, COLOR_ERROR)
                 screen.blit(no_s, (rect.centerx - no_s.get_width() // 2, rect.bottom - 28))
 
@@ -152,7 +152,7 @@ class PerkShopRenderer(BaseRenderer):
             title_text = "🃏 Вибери свій перк"
             sub_text   = "Клікни на картку"
         else:
-            old_id   = self.player.perks[self.scene.reroll_target_idx] if self.scene.reroll_target_idx >= 0 else ""
+            old_id   = self.scene.player.perks[self.scene.reroll_target_idx] if self.scene.reroll_target_idx >= 0 else ""
             old_name = PERKS[old_id].name if old_id in PERKS else "?"
             title_text = f"🔄 Заміна: {old_name}"
             sub_text   = "Вибери новий перк замість старого"
@@ -226,7 +226,7 @@ class PerkShopRenderer(BaseRenderer):
         screen.blit(warn_s, (cx - warn_s.get_width() // 2, 148))
 
         # Список
-        unique  = list(dict.fromkeys(self.player.perks))
+        unique  = list(dict.fromkeys(self.scene.player.perks))
         row_h   = 56
         list_x  = cx - 300
         list_top = 200
@@ -268,7 +268,7 @@ class PerkShopRenderer(BaseRenderer):
             rar_s = font_sm.render(perk.rarity_name, True, rarity_color)
             screen.blit(rar_s, (rect.x + 56, rect.y + 32))
 
-            cnt = self.player.perks.count(perk_id)
+            cnt = self.scene.player.perks.count(perk_id)
             if cnt > 1:
                 cnt_s = font_norm.render(f"×{cnt}", True, COLOR_GOLD)
                 screen.blit(cnt_s, (rect.right - cnt_s.get_width() - 12,

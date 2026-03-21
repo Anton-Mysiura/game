@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/tower.py
 """
+from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
@@ -31,7 +32,7 @@ class TowerRenderer(BaseRenderer):
         cx, cy, cw, ch = SCREEN_WIDTH - 210, 110, 190, 90
         surf = pygame.Surface((cw, ch), pygame.SRCALPHA)
         surf.fill((18, 14, 10, 210))
-        lclr = level_color(enemy.level, self.player.level)
+        lclr = level_color(enemy.level, self.scene.player.level)
         pygame.draw.rect(surf, lclr, surf.get_rect(), 2, border_radius=8)
         screen.blit(surf, (cx, cy))
         font  = assets.get_font(FONT_SIZE_SMALL)
@@ -40,7 +41,6 @@ class TowerRenderer(BaseRenderer):
         screen.blit(font.render(f"Рів.{enemy.level}  ❤{enemy.hp}  ⚔{enemy.attack}  🛡{enemy.defense}",
                                 True, COLOR_TEXT_DIM), (cx + 8, cy + 30))
         if enemy.loot_materials:
-            from game.data import MATERIALS
             mats = [k for k, v in enemy.loot_materials.items() if v > 0]
             icons = "".join(MATERIALS[m].icon for m in mats[:4] if m in MATERIALS)
             screen.blit(font.render(f"Лут: {icons}", True, COLOR_GOLD), (cx + 8, cy + 54))

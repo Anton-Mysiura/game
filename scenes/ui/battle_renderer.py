@@ -41,9 +41,9 @@ class BattleRenderer(BaseRenderer):
         font = assets.get_font(FONT_SIZE_MEDIUM, bold=True)
 
         # Гравець
-        player_name = font.render(self.player.name, True, COLOR_TEXT)
+        player_name = font.render(self.scene.player.name, True, COLOR_TEXT)
         screen.blit(player_name, (150, 390))
-        self.scene.player_hp_bar.draw(screen, self.player.hp, self.player.max_hp)
+        self.scene.player_hp_bar.draw(screen, self.scene.player.hp, self.scene.player.max_hp)
 
         # Ворог
         enemy_name = font.render(self.scene.enemy.name, True, COLOR_TEXT)

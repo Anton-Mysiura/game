@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/level_up.py
 """
+import math
 from ui.constants import RARITY_COLORS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
@@ -39,12 +40,11 @@ class LevelUpRenderer(BaseRenderer):
         screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 60))
 
         level_text = font_level.render(
-            f"Рівень {self.player.level}  —  Вибери бонус", True, COLOR_TEXT
+            f"Рівень {self.scene.player.level}  —  Вибери бонус", True, COLOR_TEXT
         )
         screen.blit(level_text, (SCREEN_WIDTH // 2 - level_text.get_width() // 2, 130))
 
         if self.scene._is_first_perk:
-            import math
             pulse = 0.7 + 0.3 * abs(math.sin(self.scene._anim_t * 2.0))
             warn_col = tuple(int(c * pulse) for c in (220, 160, 60))
             warn = font_sub.render("Хм... негусто. Але вибирати треба.", True, warn_col)

@@ -56,9 +56,9 @@ class DeathRenderer(BaseRenderer):
             y += 40
 
         # Статистика смерті (якщо є гравець)
-        if self.player:
+        if self.scene.player:
             font_stats = assets.get_font(FONT_SIZE_NORMAL)
-            stats_text = f"Досягнутий рівень: {self.player.level}  |  Зібрано золота: {self.player.gold} 🪙"
+            stats_text = f"Досягнутий рівень: {self.scene.player.level}  |  Зібрано золота: {self.scene.player.gold} 🪙"
             stats = font_stats.render(stats_text, True, COLOR_TEXT_DIM)
             screen.blit(stats, (SCREEN_WIDTH // 2 - stats.get_width() // 2, 400))
 

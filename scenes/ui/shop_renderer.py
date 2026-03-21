@@ -42,9 +42,9 @@ class ShopRenderer(BaseRenderer):
             qty = self.scene._buy_qty if self.scene.tab == "items" else 1
             total = price * qty
             suffix = f" ×{qty}" if qty > 1 else ""
-            owned  = self.scene.tab == "blueprints" and thing in self.player.blueprints
+            owned  = self.scene.tab == "blueprints" and thing in self.scene.player.blueprints
             self.scene.buy_btn.text    = "✓ Вже куплено" if owned else f"💰 Купити{suffix}  {total}🪙"
-            self.scene.buy_btn.enabled = not owned and self.player.gold >= total
+            self.scene.buy_btn.enabled = not owned and self.scene.player.gold >= total
         else:
             self.scene.buy_btn.text    = "💰 Купити"
             self.scene.buy_btn.enabled = False
@@ -63,7 +63,7 @@ class ShopRenderer(BaseRenderer):
         font_n = assets.get_font(FONT_SIZE_NORMAL)
         font_s = assets.get_font(FONT_SIZE_SMALL)
         screen.blit(font.render("🏪 Крамниця Барнуса", True, COLOR_GOLD), (LIST_X, 38))
-        gold = font_n.render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gold = font_n.render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gold, (SCREEN_WIDTH - gold.get_width() - 50, 42))
 
         # ── Поле пошуку ───────────────────────────────────────
@@ -121,13 +121,13 @@ class ShopRenderer(BaseRenderer):
                 sub  = thing.description
             else:
                 icon = "📜"
-                owned = any(ob.blueprint_id == thing.blueprint_id for ob in self.player.blueprints)
+                owned = any(ob.blueprint_id == thing.blueprint_id for ob in self.scene.player.blueprints)
                 name  = thing.result_name + (" ✓" if owned else "")
                 tp    = "⚔" if thing.result_type == "weapon" else "🛡"
                 sub   = f"{tp} {thing.result_desc[:45]}"
 
             name_clr = (160, 160, 160) if (self.scene.tab == "blueprints" and
-                        any(ob.blueprint_id == thing.blueprint_id for ob in self.player.blueprints)) else COLOR_TEXT
+                        any(ob.blueprint_id == thing.blueprint_id for ob in self.scene.player.blueprints)) else COLOR_TEXT
             if self.scene.tab == "items":
                 draw_icon(screen, thing.item_id, thing.icon, r.x + 8, r.y + 6, size=24)
                 screen.blit(font.render(name, True, name_clr), (r.x + 36, r.y + 6))
@@ -136,7 +136,7 @@ class ShopRenderer(BaseRenderer):
             screen.blit(font_sm.render(sub, True, COLOR_TEXT_DIM), (r.x + 14, r.y + 30))
 
             # Ціна
-            price_clr = COLOR_GOLD if self.player.gold >= price else COLOR_ERROR
+            price_clr = COLOR_GOLD if self.scene.player.gold >= price else COLOR_ERROR
             p_surf = font.render(f"{price}🪙", True, price_clr)
             screen.blit(p_surf, (r.right - p_surf.get_width() - 12, r.y + 14))
 
@@ -206,7 +206,7 @@ class ShopRenderer(BaseRenderer):
             if item.attack_bonus:
                 lines.append(f"⚔ Атака: +{item.attack_bonus}")
         lines += ["", f"Ціна: {price} 🪙"]
-        if self.player.gold < price:
+        if self.scene.player.gold < price:
             lines.append("⚠ Недостатньо золота!")
 
         for line in lines:
@@ -249,18 +249,18 @@ class ShopRenderer(BaseRenderer):
             mat = MATERIALS.get(mat_id)
             if not mat:
                 continue
-            has  = self.player.materials.get(mat_id, 0)
+            has  = self.scene.player.materials.get(mat_id, 0)
             clr  = (100, 220, 100) if has >= qty else COLOR_ERROR
             draw_icon(screen, mat_id, mat.icon, px + 4, py, size=16)
             screen.blit(fsm.render(f" {mat.name}: {has}/{qty}", True, clr), (px + 22, py)); py += 18
 
         # Статус куплений
         py += 6
-        owned = any(ob.blueprint_id == bp.blueprint_id for ob in self.player.blueprints)
+        owned = any(ob.blueprint_id == bp.blueprint_id for ob in self.scene.player.blueprints)
         if owned:
             screen.blit(fsm.render("✓ Вже куплено", True, (100, 220, 100)), (px, py)); py += 20
         else:
-            clr = COLOR_GOLD if self.player.gold >= price else COLOR_ERROR
+            clr = COLOR_GOLD if self.scene.player.gold >= price else COLOR_ERROR
             screen.blit(fsm.render(f"Ціна: {price} 🪙", True, clr), (px, py)); py += 20
-            if self.player.gold < price:
+            if self.scene.player.gold < price:
                 screen.blit(fsm.render("⚠ Недостатньо золота!", True, COLOR_ERROR), (px, py))

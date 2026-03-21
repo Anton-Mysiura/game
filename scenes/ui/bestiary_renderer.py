@@ -97,9 +97,8 @@ class BestiaryRenderer(BaseRenderer):
         screen.blit(loc_surf, (rect.x + 52, rect.y + 34))
 
         # Ефективний рівень для поточного гравця
-        from game.enemy_scaling import enemy_level, level_color
-        eff_lvl = enemy_level(entry["sprite_name"], self.player.level)
-        lvl_clr = level_color(eff_lvl, self.player.level)
+        eff_lvl = enemy_level(entry["sprite_name"], self.scene.player.level)
+        lvl_clr = level_color(eff_lvl, self.scene.player.level)
         lvl_surf = font_sm.render(f"Рівень {eff_lvl}", True, lvl_clr)
         screen.blit(lvl_surf, (rect.x + 52, rect.y + 52))
 

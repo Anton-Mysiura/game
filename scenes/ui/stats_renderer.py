@@ -30,7 +30,7 @@ class StatsRenderer(BaseRenderer):
 
         # Заголовок
         fh = assets.get_font(FONT_SIZE_LARGE, bold=True)
-        title = fh.render(f"📊 {self.player.name}", True, COLOR_GOLD)
+        title = fh.render(f"📊 {self.scene.player.name}", True, COLOR_GOLD)
         screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 42))
 
         # Вкладки
@@ -53,7 +53,7 @@ class StatsRenderer(BaseRenderer):
     # ── Загальне ──────────────────────────────────────────────────
 
     def _draw_general(self, screen):
-        p   = self.player
+        p   = self.scene.player
         fn  = assets.get_font(FONT_SIZE_NORMAL, bold=True)
         fsm = assets.get_font(FONT_SIZE_SMALL)
         px, py = PNL_X + 24, PNL_Y + 16
@@ -86,7 +86,7 @@ class StatsRenderer(BaseRenderer):
     # ── Бойова ────────────────────────────────────────────────────
 
     def _draw_combat(self, screen):
-        p   = self.player
+        p   = self.scene.player
         fsm = assets.get_font(FONT_SIZE_SMALL)
         fn  = assets.get_font(FONT_SIZE_NORMAL, bold=True)
         px, py = PNL_X + 24, PNL_Y + 16
@@ -116,7 +116,7 @@ class StatsRenderer(BaseRenderer):
             py += 24
 
         # Рекорд — якщо є last_battle_record
-        rec = getattr(self.game, "last_battle_record", None)
+        rec = getattr(self.scene.game, "last_battle_record", None)
         if rec:
             py += 10
             screen.blit(fn.render("Останній бій:", True, COLOR_GOLD), (px, py)); py += 24
@@ -133,7 +133,7 @@ class StatsRenderer(BaseRenderer):
     # ── Шахта ─────────────────────────────────────────────────────
 
     def _draw_mine(self, screen):
-        p   = self.player
+        p   = self.scene.player
         fn  = assets.get_font(FONT_SIZE_NORMAL, bold=True)
         fsm = assets.get_font(FONT_SIZE_SMALL)
         px, py = PNL_X + 24, PNL_Y + 16
@@ -165,7 +165,6 @@ class StatsRenderer(BaseRenderer):
         screen.blit(fn.render("Шахтар Борис:", True, COLOR_GOLD), (px, py)); py += 26
 
         if hasattr(p, "miner"):
-            from game.miner import MinerState, TIERS
             m = p.miner
             STATUS_UA = {
                 MinerState.STATUS_IDLE:    ("😊 Вільний", (100, 220, 100)),
@@ -211,12 +210,11 @@ class StatsRenderer(BaseRenderer):
     # ── Репутація ─────────────────────────────────────────────────
 
     def _draw_reputation(self, screen):
-        p   = self.player
+        p   = self.scene.player
         fn  = assets.get_font(FONT_SIZE_NORMAL, bold=True)
         fsm = assets.get_font(FONT_SIZE_SMALL)
         px, py = PNL_X + 24, PNL_Y + 16
 
-        from game.reputation import get_tier, get_next_tier, TIERS as REP_TIERS
         rep  = getattr(p, "reputation", 0)
         tier = get_tier(rep)
         nxt  = get_next_tier(rep)

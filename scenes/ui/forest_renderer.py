@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/forest.py
 """
+from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
@@ -35,9 +36,9 @@ class ForestRenderer(BaseRenderer):
         if self.scene.stage == "free_roam":
             font_s = assets.get_font(FONT_SIZE_SMALL)
             kills  = font_s.render(
-                f"⚔ Вбито: {self.player.enemies_killed}   "
-                f"👺 Гоблінів: {self.player.goblins_killed}   "
-                f"👹 Орків: {self.player.orcs_killed}",
+                f"⚔ Вбито: {self.scene.player.enemies_killed}   "
+                f"👺 Гоблінів: {self.scene.player.goblins_killed}   "
+                f"👹 Орків: {self.scene.player.orcs_killed}",
                 True, COLOR_TEXT_DIM)
             screen.blit(kills, (40, 96))
 
@@ -57,7 +58,6 @@ class ForestRenderer(BaseRenderer):
         enemy = self.scene._next_enemy
         if not enemy:
             return
-        from game.enemy_scaling import level_color
 
         cx = SCREEN_WIDTH - 210
         cy = 110
@@ -65,7 +65,7 @@ class ForestRenderer(BaseRenderer):
 
         surf = pygame.Surface((cw, ch), pygame.SRCALPHA)
         surf.fill((18, 14, 10, 210))
-        lclr = level_color(enemy.level, self.player.level)
+        lclr = level_color(enemy.level, self.scene.player.level)
         pygame.draw.rect(surf, lclr, surf.get_rect(), 2, border_radius=8)
         screen.blit(surf, (cx, cy))
 
@@ -79,7 +79,6 @@ class ForestRenderer(BaseRenderer):
         # Очікуваний лут
         if enemy.loot_materials:
             mats = [k for k, v in enemy.loot_materials.items() if v > 0]
-            from game.data import MATERIALS
             icons = "".join(MATERIALS[m].icon for m in mats[:4] if m in MATERIALS)
             screen.blit(font.render(f"Лут: {icons}", True, COLOR_GOLD), (cx + 8, cy + 66))
 
@@ -96,7 +95,7 @@ class ForestRenderer(BaseRenderer):
         screen.blit(warn, (cx - warn.get_width() // 2, cy - 95))
         font = assets.get_font(FONT_SIZE_NORMAL)
         hp_text = font.render(
-            f"У тебе лише {self.player.hp} / {self.player.max_hp} HP.",
+            f"У тебе лише {self.scene.player.hp} / {self.scene.player.max_hp} HP.",
             True, COLOR_TEXT)
         screen.blit(hp_text, (cx - hp_text.get_width() // 2, cy - 48))
         question = font.render("Все одно йти в бій?", True, COLOR_TEXT_DIM)

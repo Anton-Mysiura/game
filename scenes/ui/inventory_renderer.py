@@ -6,6 +6,10 @@
 
 Логіка гри: scenes/core/inventory.py
 """
+from game.data import MATERIALS
+from game.data import RARITY_COLOR
+from game.mutations import get_mutation
+from game.mutations import RARITY_NAME_UA
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 
@@ -31,7 +35,7 @@ class InventoryRenderer(BaseRenderer):
         self.scene.main_panel.draw(screen)
         ft = assets.get_font(FONT_SIZE_HUGE, bold=True)
         screen.blit(ft.render("🎒 Інвентар", True, COLOR_GOLD), (100, 68))
-        gs = assets.get_font(FONT_SIZE_MEDIUM).render(f"💰 {self.player.gold} золота", True, COLOR_GOLD)
+        gs = assets.get_font(FONT_SIZE_MEDIUM).render(f"💰 {self.scene.player.gold} золота", True, COLOR_GOLD)
         screen.blit(gs, (SCREEN_WIDTH - 300, 68))
 
         if self.scene._active_filter == "material":
@@ -46,17 +50,17 @@ class InventoryRenderer(BaseRenderer):
         self._draw_grid_badges(screen, filtered)
         fsm = assets.get_font(FONT_SIZE_SMALL)
         gbot = self.scene.inventory_grid.y + 4 * (64+5)
-        screen.blit(fsm.render(f"{len(filtered)} / {len(self.player.inventory)} предметів",
+        screen.blit(fsm.render(f"{len(filtered)} / {len(self.scene.player.inventory)} предметів",
             True, COLOR_TEXT_DIM), (100, gbot+6))
 
         fb = assets.get_font(FONT_SIZE_NORMAL, bold=True)
         fn = assets.get_font(FONT_SIZE_NORMAL)
         screen.blit(fb.render("Екіпіровано:", True, COLOR_GOLD), (100, 500))
         ey = 530
-        if self.player.equipped_weapon:
-            screen.blit(fn.render(f"⚔ {self.player.equipped_weapon.name} (+{self.player.equipped_weapon.attack_bonus} ATK)", True, COLOR_TEXT), (100, ey)); ey += 28
-        if self.player.equipped_armor:
-            screen.blit(fn.render(f"🛡 {self.player.equipped_armor.name} (+{self.player.equipped_armor.defense_bonus} DEF)", True, COLOR_TEXT), (100, ey))
+        if self.scene.player.equipped_weapon:
+            screen.blit(fn.render(f"⚔ {self.scene.player.equipped_weapon.name} (+{self.scene.player.equipped_weapon.attack_bonus} ATK)", True, COLOR_TEXT), (100, ey)); ey += 28
+        if self.scene.player.equipped_armor:
+            screen.blit(fn.render(f"🛡 {self.scene.player.equipped_armor.name} (+{self.scene.player.equipped_armor.defense_bonus} DEF)", True, COLOR_TEXT), (100, ey))
 
         self.scene.info_panel.draw(screen)
         item = self.scene._real_item()
@@ -69,7 +73,7 @@ class InventoryRenderer(BaseRenderer):
         is_pot  = item and item.item_type == "potion"
         is_tool = item and item.item_type == "tool"
         in_dis  = bool(item and any(o.item_data.get("item_id")==item.item_id
-                                    for o in self.player.dismantle_queue.orders))
+                                    for o in self.scene.player.dismantle_queue.orders))
         self.scene.equip_button.enabled  = bool(is_gear)
         self.scene.use_button.enabled    = bool(is_pot)
         self.scene.sell_button.enabled   = bool(item and not is_tool)
@@ -89,9 +93,9 @@ class InventoryRenderer(BaseRenderer):
                 screen.blit(hint2, (SCREEN_WIDTH // 2 + 220, 487))
         elif item:
             self.scene.sell_button.draw(screen)
-        hp_pots = [i for i in self.player.inventory if i.item_type=="potion" and i.hp_restore>0]
+        hp_pots = [i for i in self.scene.player.inventory if i.item_type=="potion" and i.hp_restore>0]
         if hp_pots:
-            self.scene.heal_all_btn.enabled = self.player.hp < self.player.total_max_hp
+            self.scene.heal_all_btn.enabled = self.scene.player.hp < self.scene.player.total_max_hp
             self.scene.heal_all_btn.text = f"💊 Вжити зілля до макс. HP  ({len(hp_pots)}шт)"
             self.scene.heal_all_btn.draw(screen)
 
@@ -146,7 +150,7 @@ class InventoryRenderer(BaseRenderer):
 
             # Кількість для зілля
             if itype == "potion":
-                count = sum(1 for x in self.player.inventory
+                count = sum(1 for x in self.scene.player.inventory
                             if getattr(x, "item_id", "") == item.item_id)
                 if count > 1:
                     cnt_s = font.render(str(count), True, (255, 255, 255))
@@ -158,9 +162,8 @@ class InventoryRenderer(BaseRenderer):
                                  pygame.Rect(sx, sy, 64, 64), 2)
 
     def _draw_materials_list(self, screen):
-        from game.data import MATERIALS
         mats = sorted(
-            [(mid, qty) for mid,qty in self.player.materials.items() if qty>0],
+            [(mid, qty) for mid,qty in self.scene.player.materials.items() if qty>0],
             key=lambda x: (MATERIALS[x[0]].rarity if x[0] in MATERIALS else "zzz",
                            MATERIALS[x[0]].name   if x[0] in MATERIALS else x[0]))
         if not mats:
@@ -219,7 +222,6 @@ class InventoryRenderer(BaseRenderer):
 
     def _draw_item_info(self, screen, item):
         x0=SCREEN_WIDTH//2+220
-        from game.mutations import get_mutation,RARITY_COLOR,RARITY_NAME_UA
         mut=get_mutation(item)
         draw_icon(screen, item.item_id, item.icon, SCREEN_WIDTH//2+280, 218, size=48)
         fn=assets.get_font(FONT_SIZE_MEDIUM,bold=True)
@@ -258,10 +260,10 @@ class InventoryRenderer(BaseRenderer):
         fn=assets.get_font(FONT_SIZE_NORMAL)
         fs=assets.get_font(FONT_SIZE_SMALL)
         if new_item.item_type=="weapon":
-            cur=self.player.equipped_weapon; nv=new_item.attack_bonus
+            cur=self.scene.player.equipped_weapon; nv=new_item.attack_bonus
             cv=cur.attack_bonus if cur else 0; sl="ATK"; si="⚔"
         else:
-            cur=self.player.equipped_armor; nv=new_item.defense_bonus
+            cur=self.scene.player.equipped_armor; nv=new_item.defense_bonus
             cv=cur.defense_bonus if cur else 0; sl="DEF"; si="🛡"
         d=nv-cv
         ts=fh.render("⚖ Порівняння",True,COLOR_GOLD)
@@ -292,7 +294,6 @@ class InventoryRenderer(BaseRenderer):
 
     def _draw_tooltip(self, screen, item, pos):
         """Маленький tooltip при наведенні на предмет."""
-        from game.mutations import get_mutation, RARITY_NAME_UA
         font = assets.get_font(FONT_SIZE_SMALL)
         lines = [item.name]
         if item.item_type == "weapon":
@@ -329,10 +330,10 @@ class InventoryRenderer(BaseRenderer):
 
     def _draw_sell_junk_btn(self, screen):
         """Кнопка 'Продати непотрібне' — все окрім зілля і екіпіровки."""
-        junk = [i for i in self.player.inventory
+        junk = [i for i in self.scene.player.inventory
                 if i.item_type not in ("potion",)
-                and i != self.player.equipped_weapon
-                and i != self.player.equipped_armor]
+                and i != self.scene.player.equipped_weapon
+                and i != self.scene.player.equipped_armor]
         if not junk:
             return
         total = sum(max(1, i.value // 2) for i in junk)

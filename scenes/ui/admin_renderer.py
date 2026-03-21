@@ -6,8 +6,16 @@
 
 Логіка гри: scenes/core/admin.py
 """
-from game.data import ITEMS
+from scenes.core.admin import (
+    _W, _H, _X, _Y, _TAB_H, _CONTENT_Y, _CONTENT_H, _ROW_H,
+    _COL_L, _COL_R, _TABS,
+    _C_PANEL, _C_HEADER, _C_ROW, _C_ROW_H, _C_SEL, _C_BORDER,
+    _C_GOLD, _C_GREEN, _C_RED, _C_DIM, _C_TEXT,
+)
+
+import time
 from game.data import MATERIALS
+from game.data import ITEMS
 from game.data import BLUEPRINTS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
@@ -110,7 +118,7 @@ class AdminRenderer(BaseRenderer):
         screen.blit(cnt_lbl, (_COL_L, _Y + _H - 56))
 
     def _draw_player(self, screen):
-        p = self.player
+        p = self.scene.player
         fn  = assets.get_font(FONT_SIZE_NORMAL)
         fns = assets.get_font(FONT_SIZE_SMALL)
         fnb = assets.get_font(FONT_SIZE_MEDIUM)
@@ -144,7 +152,7 @@ class AdminRenderer(BaseRenderer):
         fnb = assets.get_font(FONT_SIZE_MEDIUM)
         fns = assets.get_font(FONT_SIZE_SMALL)
         sy  = _CONTENT_Y
-        p   = self.player
+        p   = self.scene.player
 
         screen.blit(fnb.render("Бойова статистика", True, _C_GOLD), (_COL_L, sy)); sy += 44
         rows = [
@@ -166,7 +174,6 @@ class AdminRenderer(BaseRenderer):
             btn.draw(screen)
 
     def _draw_skip(self, screen):
-        import time
         fnb = assets.get_font(FONT_SIZE_MEDIUM)
         fns = assets.get_font(FONT_SIZE_SMALL)
         sy  = _CONTENT_Y
@@ -192,7 +199,7 @@ class AdminRenderer(BaseRenderer):
             sy2 += 32
 
         # Крафт
-        q = getattr(self.player, "crafting_queue", None)
+        q = getattr(self.scene.player, "crafting_queue", None)
         if q:
             active = [o for o in q.orders if not o.is_done()]
             done   = [o for o in q.orders if  o.is_done()]
@@ -204,7 +211,7 @@ class AdminRenderer(BaseRenderer):
                 status_row("Крафт", "порожньо", _C_DIM)
 
         # Розбирання
-        dq = getattr(self.player, "dismantle_queue", None)
+        dq = getattr(self.scene.player, "dismantle_queue", None)
         if dq:
             active_d = [o for o in dq.orders if not o.is_done()]
             if active_d:
@@ -215,7 +222,7 @@ class AdminRenderer(BaseRenderer):
                 status_row("Розбирання", "порожньо", _C_DIM)
 
         # Ринок
-        m = getattr(self.player, "market", None)
+        m = getattr(self.scene.player, "market", None)
         if m:
             t = m.time_to_refresh()
             if t > 0:
@@ -225,7 +232,7 @@ class AdminRenderer(BaseRenderer):
                 status_row("Ринок", "готовий до оновлення", _C_GREEN)
 
         # Шахтар
-        mn = getattr(self.player, "miner", None)
+        mn = getattr(self.scene.player, "miner", None)
         if mn:
             tl = mn.time_left() if hasattr(mn, "time_left") else 0
             if tl > 0:
@@ -235,7 +242,7 @@ class AdminRenderer(BaseRenderer):
                 status_row("Шахтар", "вільний", _C_GREEN)
 
         # Щоденні квести
-        daily = getattr(self.player, "daily_quests", None)
+        daily = getattr(self.scene.player, "daily_quests", None)
         if daily:
             done_count = sum(1 for dq2 in daily.quests if dq2.done)
             total      = len(daily.quests)
@@ -255,8 +262,8 @@ class AdminRenderer(BaseRenderer):
 
         sy += 16
         info = [
-            ("FPS", str(round(self.game.clock.get_fps())) if hasattr(self.game,"clock") else "?"),
-            ("Сцена", type(self.game.current_scene).__name__ if hasattr(self.game,"current_scene") else "?"),
+            ("FPS", str(round(self.scene.game.clock.get_fps())) if hasattr(self.scene.game,"clock") else "?"),
+            ("Сцена", type(self.scene.game.current_scene).__name__ if hasattr(self.scene.game,"current_scene") else "?"),
         ]
         for k, v in info:
             screen.blit(fns.render(f"{k}:  {v}", True, _C_DIM), (_COL_L, sy))
