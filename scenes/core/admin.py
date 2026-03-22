@@ -28,6 +28,7 @@ _TABS = [
     ("Кресленики", "blueprints"),
     ("Бій",        "battle"),
     ("Скіп",       "skip"),
+    ("Текстури",   "textures"),
     ("Система",    "system"),
 ]
 
@@ -379,7 +380,13 @@ class AdminScene(Scene):
                     self._search += event.unicode.lower()
 
         if event.type == pygame.MOUSEWHEEL:
-            self._scroll -= event.y * _ROW_H * 2
+            if self._tab == "textures":
+                # Для вкладки текстур — зберігаємо scroll в окремій змінній
+                if not hasattr(self, "_tex_scroll"):
+                    self._tex_scroll = 0
+                self._tex_scroll = max(0, self._tex_scroll - event.y * 30)
+            else:
+                self._scroll -= event.y * _ROW_H * 2
 
     def _handle_row_click(self, mouse):
         area = self._rows_area()

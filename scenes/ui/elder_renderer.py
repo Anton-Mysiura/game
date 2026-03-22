@@ -6,6 +6,9 @@
 
 Логіка гри: scenes/core/elder.py
 """
+from game.quests import get_completable_quests
+from game.reputation import get_next_tier, get_tier
+from scenes.core.elder import CLR_ACTIVE, CLR_AVAILABLE, CLR_COMPLETABLE, CLR_DONE, INFO_W, INFO_X, LIST_W, LIST_X, LIST_Y, ROW_H, VISIBLE
 from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

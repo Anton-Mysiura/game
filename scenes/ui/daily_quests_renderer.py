@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/daily_quests_scene.py
 """
+from datetime import date, datetime
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 from ui.constants import *

@@ -6,6 +6,9 @@
 
 Логіка гри: scenes/core/mine.py
 """
+from game.miner import MinerState
+from scenes.core.forest_event import PANEL_H, PANEL_W, PANEL_X, PANEL_Y
+from scenes.core.mine import BROKEN_PICKAXE_ID, NPC_X, NPC_Y, PICKAXE_ID, SHOVEL_ID
 from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

@@ -6,6 +6,9 @@
 
 Логіка гри: scenes/core/bestiary.py
 """
+from game.enemy_scaling import enemy_level, level_color
+from scenes.core.bestiary import DIFFICULTY_COLOR, DIFFICULTY_STARS, ENEMY_REGISTRY, PANELS_BOT, PANELS_TOP
+from scenes.core.elder import LIST_W
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

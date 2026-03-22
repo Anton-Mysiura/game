@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/wanderer.py
 """
+from scenes.core.wanderer import CARDS_X, CARDS_Y, CARD_H, CARD_PAD, CARD_W
 from game.data import MATERIALS
 from game.data import BLUEPRINTS
 from ui.constants import RARITY_COLORS

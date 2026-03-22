@@ -6,8 +6,8 @@
 
 Логіка гри: scenes/core/market.py
 """
-from game.market import REFRESH_SEC
-from scenes.core.market import CARD_H, CARD_W, GRID_Y, log
+from game.market import REFRESH_SEC, fmt_time_market, RARITY_UA, RARITY_COLOR
+from scenes.core.market import CARD_H, CARD_W, GRID_Y
 from game.data import RARITY_COLOR
 from game.mutations import MUTATIONS
 import pygame
@@ -156,7 +156,7 @@ class MarketRenderer(BaseRenderer):
             mut_id, mut_rar = mut_info
             mut = MUTATIONS.get(mut_id)
             if mut:
-                m_clr = MUT_RARITY_COLOR.get(mut.rarity, COLOR_TEXT)
+                m_clr = RARITY_COLOR.get(mut.rarity, COLOR_TEXT)
                 screen.blit(font.render(
                     f"✦ {mut.icon} {mut.name}: {mut.desc}", True, m_clr),
                     (px, py)); py += 17

@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/inventory.py
 """
+from scenes.core.inventory import CLR_BETTER, CLR_NEW, CLR_SAME, CLR_WORSE, CMP_H, CMP_W, CMP_X, CMP_Y, EXPENSIVE_THRESHOLD, _stat_color
 from game.data import MATERIALS
 from game.data import RARITY_COLOR
 from game.mutations import get_mutation

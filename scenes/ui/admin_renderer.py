@@ -53,6 +53,7 @@ class AdminRenderer(BaseRenderer):
         elif self.scene._tab == "blueprints": self._draw_list(screen, BLUEPRINTS, self.scene._row_blueprint)
         elif self.scene._tab == "battle":     self._draw_battle(screen)
         elif self.scene._tab == "skip":       self._draw_skip(screen)
+        elif self.scene._tab == "textures":   self._draw_textures(screen)
         elif self.scene._tab == "system":     self._draw_system(screen)
 
         self._draw_statusbar(screen)
@@ -248,6 +249,109 @@ class AdminRenderer(BaseRenderer):
             total      = len(daily.quests)
             status_row("Щоденні квести", f"{done_count}/{total} виконано",
                        _C_GREEN if done_count == total else _C_TEXT)
+
+
+    def _draw_textures(self, screen):
+        """Вкладка перегляду всіх завантажених текстур."""
+        import os
+        from pathlib import Path as _Path
+        from ui.constants import TEXTURES_DIR, ANIMATIONS_DIR
+
+        fnb = assets.get_font(FONT_SIZE_MEDIUM)
+        fns = assets.get_font(FONT_SIZE_SMALL)
+        fxs = assets.get_font(12)
+
+        # Параметри сітки
+        THUMB = 80          # розмір мініатюри
+        GAP   = 8           # відступ між ними
+        COLS  = (_W - 32) // (THUMB + GAP)
+        area_x = _X + 16
+        area_y = _CONTENT_Y
+        area_h = _CONTENT_H
+
+        # Збираємо всі PNG файли
+        tex_dir = _Path(TEXTURES_DIR)
+        all_pngs = []
+        if tex_dir.exists():
+            for p in sorted(tex_dir.rglob("*.png")):
+                rel = str(p.relative_to(tex_dir))
+                all_pngs.append((rel, p))
+
+        # Scroll
+        if not hasattr(self.scene, "_tex_scroll"):
+            self.scene._tex_scroll = 0
+        scroll = self.scene._tex_scroll
+        total_rows = max(1, (len(all_pngs) + COLS - 1) // COLS)
+        max_scroll = max(0, total_rows * (THUMB + GAP + 18) - area_h)
+        scroll = max(0, min(scroll, max_scroll))
+        self.scene._tex_scroll = scroll
+
+        # Малюємо фон зони
+        pygame.draw.rect(screen, _C_PANEL,
+                         (area_x - 4, area_y, _W - 24, area_h), border_radius=4)
+
+        # Clip surface
+        clip = pygame.Surface((_W - 24, area_h), pygame.SRCALPHA)
+        clip.fill((0, 0, 0, 0))
+
+        first_row = scroll // (THUMB + GAP + 18)
+        for idx, (rel_path, abs_path) in enumerate(all_pngs):
+            col = idx % COLS
+            row = idx // COLS
+            if row < first_row - 1 or row > first_row + area_h // (THUMB + GAP + 18) + 1:
+                continue
+
+            cx = col * (THUMB + GAP)
+            cy = row * (THUMB + GAP + 18) - scroll
+
+            if cy + THUMB + 18 < 0 or cy > area_h:
+                continue
+
+            # Фон слоту
+            pygame.draw.rect(clip, _C_ROW, (cx, cy, THUMB, THUMB + 18), border_radius=4)
+
+            # Завантажуємо мініатюру
+            try:
+                surf = assets.load_from_path(str(abs_path), size=(THUMB - 4, THUMB - 4))
+                if surf:
+                    clip.blit(surf, (cx + 2, cy + 2))
+                else:
+                    raise Exception("None")
+            except Exception:
+                # Плейсхолдер
+                pygame.draw.rect(clip, (60, 50, 40), (cx + 2, cy + 2, THUMB - 4, THUMB - 4))
+                err = fxs.render("?", True, _C_DIM)
+                clip.blit(err, (cx + THUMB // 2 - 4, cy + THUMB // 2 - 8))
+
+            # Підпис — назва файлу
+            name = abs_path.stem[:12]
+            lbl  = fxs.render(name, True, _C_DIM)
+            clip.blit(lbl, (cx + THUMB // 2 - lbl.get_width() // 2, cy + THUMB + 2))
+
+            # Рамка при наведенні
+            mx, my = pygame.mouse.get_pos()
+            local_x = mx - area_x
+            local_y = my - area_y
+            if cx <= local_x <= cx + THUMB and cy <= local_y <= cy + THUMB + 18:
+                pygame.draw.rect(clip, _C_GOLD, (cx, cy, THUMB, THUMB + 18), 1, border_radius=4)
+                # Повна назва знизу екрану
+                full_lbl = fns.render(rel_path, True, _C_TEXT)
+                screen.blit(full_lbl, (area_x, _Y + _H - 50))
+
+        screen.blit(clip, (area_x, area_y))
+
+        # Смуга прокрутки
+        if total_rows * (THUMB + GAP + 18) > area_h:
+            sb_x = _X + _W - 14
+            sb_h = area_h
+            th   = max(20, area_h * area_h // (total_rows * (THUMB + GAP + 18)))
+            ty   = area_y + int(scroll / max(1, max_scroll) * (sb_h - th))
+            pygame.draw.rect(screen, _C_ROW,  (sb_x, area_y, 6, sb_h), border_radius=3)
+            pygame.draw.rect(screen, _C_GOLD, (sb_x, ty, 6, th), border_radius=3)
+
+        # Лічильник
+        cnt = fxs.render(f"{len(all_pngs)} текстур  |  scroll: колесо миші", True, _C_DIM)
+        screen.blit(cnt, (area_x, _Y + _H - 30))
 
     def _draw_system(self, screen):
         fnb = assets.get_font(FONT_SIZE_MEDIUM)

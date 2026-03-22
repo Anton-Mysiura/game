@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/world_map.py
 """
+from game.location_bonuses import get_active_bonuses
+from scenes.core.world_map import FOG_ALPHA, LOCATIONS, NODE_RADIUS, PATHS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 from ui.constants import *

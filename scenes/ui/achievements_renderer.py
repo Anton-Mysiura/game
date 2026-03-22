@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/achievements.py
 """
+from scenes.core.achievements import ITEM_GAP, ITEM_H, LIST_H
+from scenes.core.elder import LIST_W, LIST_X, LIST_Y
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

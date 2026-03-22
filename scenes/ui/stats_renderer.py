@@ -6,6 +6,11 @@
 
 Логіка гри: scenes/core/stats.py
 """
+from game.miner import MinerState
+from game.reputation import get_next_tier, get_tier
+from game.reputation import TIERS as REP_TIERS
+from scenes.core.stats import _fmt
+from scenes.core.stats import PNL_W, PNL_X, PNL_Y, TABS
 from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

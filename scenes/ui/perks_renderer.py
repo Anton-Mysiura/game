@@ -6,6 +6,10 @@
 
 Логіка гри: scenes/core/perks.py
 """
+from scenes.core.perks import RARITY_ORDER
+from game.perk_system import RARITY_NAMES
+from scenes.core.perk_shop import CARD_GAP
+from scenes.core.wanderer import CARD_H, CARD_W
 import math
 from ui.constants import RARITY_COLORS
 import pygame

@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/hero_index.py
 """
+from scenes.core.hero_index import _INFO_W, _INFO_X, _INFO_Y, _LIST_W, _LIST_X, _LIST_Y, _ROW_H, _VISIBLE
 from game.heroes import HERO_RARITY_COLORS
 from game.heroes import HERO_RARITY_NAMES_UA
 import pygame
@@ -15,6 +16,9 @@ from ui.constants import *
 from ui.components import Button
 from ui.constants import *
 from ui.assets import assets
+
+_SW = SCREEN_WIDTH
+_SH = SCREEN_HEIGHT
 
 
 class HeroIndexRenderer(BaseRenderer):

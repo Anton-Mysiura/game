@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/perk_shop.py
 """
+from game.perk_system import RARITY_NAMES
+from scenes.core.perk_shop import extra_cost, reroll_cost
 from game.perk_system import PERKS
 from ui.constants import RARITY_COLORS
 import pygame
@@ -297,7 +299,7 @@ class PerkShopRenderer(BaseRenderer):
     #  Утиліти
     # ──────────────────────────────────────
 
-    def _draw_wrapped(screen, font, text: str, color, x, y, max_w):
+    def _draw_wrapped(self, screen, font, text: str, color, x, y, max_w):
         words, line, ly = text.split(), "", y
         for w in words:
             test = f"{line} {w}".strip()

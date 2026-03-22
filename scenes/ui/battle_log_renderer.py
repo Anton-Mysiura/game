@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/battle_log_scene.py
 """
+from scenes.core.battle_log_scene import FILTERS, VISIBLE_H
+from scenes.core.elder import LIST_W, LIST_X, LIST_Y, ROW_H
 import pygame
 from scenes.ui.base_renderer import BaseRenderer
 

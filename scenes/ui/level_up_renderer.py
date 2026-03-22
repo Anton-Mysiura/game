@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/level_up.py
 """
+from game.perk_system import RARITY_NAMES
 import math
 from ui.constants import RARITY_COLORS
 import pygame

@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/ruins.py
 """
+from game.enemy_scaling import level_color
 from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

@@ -6,6 +6,8 @@
 
 Логіка гри: scenes/core/skill_tree.py
 """
+from scenes.core.elder import CLR_AVAILABLE
+from scenes.core.skill_tree import BRANCH_Y, CLR_BORDER_AVAIL, CLR_BORDER_LOCKED, CLR_LOCKED, NODE_R, _node_center
 from game.skill_tree import SKILL_NODES
 from game.skill_tree import BRANCHES
 import pygame

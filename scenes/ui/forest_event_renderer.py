@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/forest_event.py
 """
+from scenes.core.forest_event import PANEL_H, PANEL_W, PANEL_X, PANEL_Y
 from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

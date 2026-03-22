@@ -6,6 +6,9 @@
 
 Логіка гри: scenes/core/hero_slots.py
 """
+from game.hero_roster import SLOT_UNLOCK_GOLD, SLOT_UNLOCK_LEVELS
+from scenes.core.hero_roulette import _RARITY_BG, _get_idle_frames
+from scenes.core.hero_slots import _CARDS_PER_ROW, _GRID_ROWS_VIS, _GRID_Y, _SLOT_Y
 from game.heroes import HEROES
 from game.heroes import HERO_RARITY_COLORS
 from game.heroes import HERO_RARITY_NAMES_UA
@@ -17,6 +20,9 @@ from ui.components import Button
 from ui.constants import *
 from ui.assets import assets
 from ui.notifications import notify
+
+_SW = SCREEN_WIDTH  # псевдонім для сумісності
+_SH = SCREEN_HEIGHT
 
 
 class HeroSlotsRenderer(BaseRenderer):

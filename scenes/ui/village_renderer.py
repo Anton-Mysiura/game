@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/village.py
 """
+from game.sound_manager import sounds
 import math
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

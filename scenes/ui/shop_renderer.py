@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/shop.py
 """
+from scenes.core.elder import INFO_W, INFO_X, LIST_W, LIST_X, LIST_Y, ROW_H, VISIBLE
 from game.data import MATERIALS
 import pygame
 from scenes.ui.base_renderer import BaseRenderer

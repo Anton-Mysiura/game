@@ -6,6 +6,7 @@
 
 Логіка гри: scenes/core/hero_roulette.py
 """
+from scenes.core.hero_roulette import _RARITY_BG, _get_idle_frames
 from game.heroes import HEROES
 from game.heroes import HERO_RARITY_COLORS
 from game.heroes import HERO_RARITY_NAMES_UA
