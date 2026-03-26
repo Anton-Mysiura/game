@@ -12,6 +12,7 @@ from typing import Optional
 from .player import Player
 from .save_manager import SaveManager, autosave
 from .tutorial_manager import TutorialManager
+from .transitions import get_transition_manager, DRAMATIC_OUT, DRAMATIC_IN, DEFAULT_OUT, DEFAULT_IN
 
 
 class Game:
@@ -58,8 +59,16 @@ class Game:
         self._exit_confirm      = None   # діалог підтвердження виходу
 
         # Менеджер переходів між сценами
-        from game.transitions import get_transition_manager
         self._transition = get_transition_manager()
+
+        # Кешуємо об'єкти що використовуються в game loop
+        from ui.constants import COLOR_BG
+        from ui.notifications import get_manager as _get_notif_manager
+        from game.save_indicator import update_save_indicator, draw_save_indicator
+        self._color_bg = COLOR_BG
+        self._notif_manager = _get_notif_manager()
+        self._update_save_indicator = update_save_indicator
+        self._draw_save_indicator = draw_save_indicator
 
     def _scale_rect(self):
         """Повертає (scale, offset_x, offset_y) для letterbox/pillarbox."""
@@ -127,7 +136,6 @@ class Game:
 
         # Визначаємо тривалість переходу
         dramatic = scene_name in ("battle", "death", "victory", "dragon")
-        from game.transitions import DRAMATIC_OUT, DRAMATIC_IN, DEFAULT_OUT, DEFAULT_IN
         dur = (DRAMATIC_OUT, DRAMATIC_IN) if dramatic else (DEFAULT_OUT, DEFAULT_IN)
 
         self._transition.request(
@@ -135,212 +143,186 @@ class Game:
             duration=dur,
         )
 
+    # ── Scene registry ────────────────────────────────────────────────────────
+    # Простий рядок → клас. Ліниві імпорти: модуль завантажується лише коли
+    # викликається ця сцена, тому час старту не зростає.
+    #
+    # Щоб додати нову сцену — один рядок тут. Більше нікуди лізти не треба.
+    # ─────────────────────────────────────────────────────────────────────────
+    _SCENE_REGISTRY: dict = {}  # заповнюється при першому виклику
+
+    @classmethod
+    def _get_registry(cls) -> dict:
+        """Lazy-ініціалізація реєстру сцен (імпорти — лише коли потрібно)."""
+        if cls._SCENE_REGISTRY:
+            return cls._SCENE_REGISTRY
+
+        from scenes.core.main_menu       import MainMenuScene
+        from scenes.core.hero_roulette   import HeroRouletteScene
+        from scenes.core.hero_slots      import HeroSlotsScene
+        from scenes.core.village         import VillageScene
+        from scenes.core.shop            import ShopScene
+        from scenes.core.workshop        import WorkshopScene
+        from scenes.core.forest          import ForestScene
+        from scenes.core.tower           import TowerScene
+        from scenes.core.ruins           import RuinsScene
+        from scenes.core.dragon          import DragonScene
+        from scenes.core.victory         import VictoryScene
+        from scenes.core.death           import DeathScene
+        from scenes.core.stats           import StatsScene
+        from scenes.core.inventory       import InventoryScene
+        from scenes.core.battle_log_scene import BattleLogScene
+        from scenes.core.skill_tree      import SkillTreeScene
+        from scenes.core.admin           import AdminScene
+        from scenes.core.achievements    import AchievementsScene
+        from scenes.core.perks           import PerksScene
+        from scenes.core.bestiary        import BestiaryScene
+        from scenes.core.daily_quests_scene import DailyQuestsScene
+        from scenes.core.perk_shop       import PerkShopScene
+        from scenes.core.level_up        import LevelUpScene
+        from scenes.core.world_map       import WorldMapScene
+        from scenes.core.market          import MarketScene
+        from scenes.core.elder           import ElderScene
+        from scenes.core.forest_event    import ForestEventScene
+        from scenes.core.onboarding      import OnboardingScene
+        from scenes.core.mine            import MineScene
+        from scenes.core.wanderer        import WandererScene
+
+        cls._SCENE_REGISTRY = {
+            "main_menu":    MainMenuScene,
+            "hero_roulette": HeroRouletteScene,
+            "hero_slots":   HeroSlotsScene,
+            "village":      VillageScene,
+            "shop":         ShopScene,
+            "workshop":     WorkshopScene,
+            "forest":       ForestScene,
+            "forest_free":  ForestScene,       # те саме, але з маркером (див. нижче)
+            "tower":        TowerScene,
+            "tower_free":   TowerScene,
+            "ruins":        RuinsScene,
+            "ruins_free":   RuinsScene,
+            "dragon":       DragonScene,
+            "victory":      VictoryScene,
+            "death":        DeathScene,
+            "stats":        StatsScene,
+            "inventory":    InventoryScene,
+            "battle_log":   BattleLogScene,
+            "skill_tree":   SkillTreeScene,
+            "admin":        AdminScene,
+            "achievements": AchievementsScene,
+            "perks":        PerksScene,
+            "bestiary":     BestiaryScene,
+            "daily_quests": DailyQuestsScene,
+            "perk_shop":    PerkShopScene,
+            "level_up":     LevelUpScene,
+            "world_map":    WorldMapScene,
+            "market":       MarketScene,
+            "elder":        ElderScene,
+            "forest_event": ForestEventScene,
+            "onboarding":   OnboardingScene,
+            "mine":         MineScene,
+            "wanderer":     WandererScene,
+        }
+        return cls._SCENE_REGISTRY
+
+    # Сцени що потребують маркера "from_battle" у scene_data
+    _FREE_BATTLE_SCENES: frozenset = frozenset(
+        {"forest_free", "tower_free", "ruins_free"}
+    )
+
     def _do_change_scene(self, scene_name: str, **kwargs):
         """Внутрішній метод — миттєва зміна сцени (без анімації)."""
-        # Зберігаємо дані
         self.scene_data.update(kwargs)
 
-        # Викликаємо on_exit у старої сцени
         if self.current_scene:
             self.current_scene.on_exit()
 
-        # Створюємо нову сцену
-        if scene_name == "main_menu":
-            from scenes.core.main_menu import MainMenuScene
-            self.current_scene = MainMenuScene(self)
+        self.current_scene = self._build_scene(scene_name, kwargs)
 
-        elif scene_name == "hero_roulette":
-            from scenes.core.hero_roulette import HeroRouletteScene
-            self.current_scene = HeroRouletteScene(self)
-
-        elif scene_name == "hero_slots":
-            from scenes.core.hero_slots import HeroSlotsScene
-            self.current_scene = HeroSlotsScene(self)
-
-        elif scene_name == "village":
-            from scenes.core.village import VillageScene
-            self.current_scene = VillageScene(self)
-
-        elif scene_name == "shop":
-            from scenes.core.shop import ShopScene
-            self.current_scene = ShopScene(self)
-
-        elif scene_name == "workshop":
-            from scenes.core.workshop import WorkshopScene
-            self.current_scene = WorkshopScene(self)
-
-
-        elif scene_name == "battle":
-
-            from scenes.core.battle_fighting import FightingBattleScene
-
-            enemy = kwargs.get("enemy")
-
-            return_scene = kwargs.get("return_scene", "village")
-            background_name = kwargs.get("background_name", None)
-
-            self.current_scene = FightingBattleScene(self, enemy, return_scene, background_name)
-        elif scene_name == "forest":
-            from scenes.core.forest import ForestScene
-            self.current_scene = ForestScene(self)
-
-        elif scene_name == "forest_free":
-            # Повернення після вільного бою у лісі
-            from scenes.core.forest import ForestScene
-            self.scene_data["from_battle"] = "forest_free"
-            self.current_scene = ForestScene(self)
-
-        # У методі change_scene додай цей блок (після "forest"):
-
-        elif scene_name == "forest_battle":
-            # Одразу бій з гобліном після туторіалу
-            from game.enemy import make_goblin
-            enemy = make_goblin()
-            self._do_change_scene("battle", enemy=enemy, return_scene="forest")
-
-        elif scene_name == "tower":
-            from scenes.core.tower import TowerScene
-            self.current_scene = TowerScene(self)
-
-        elif scene_name == "tower_free":
-            from scenes.core.tower import TowerScene
-            self.scene_data["from_battle"] = "tower_free"
-            self.current_scene = TowerScene(self)
-
-        elif scene_name == "ruins":
-            from scenes.core.ruins import RuinsScene
-            self.current_scene = RuinsScene(self)
-
-        elif scene_name == "ruins_free":
-            from scenes.core.ruins import RuinsScene
-            self.scene_data["from_battle"] = "ruins_free"
-            self.current_scene = RuinsScene(self)
-
-        elif scene_name == "dragon":
-            from scenes.core.dragon import DragonScene
-            self.current_scene = DragonScene(self)
-
-        elif scene_name == "victory":
-            from scenes.core.victory import VictoryScene
-            self.current_scene = VictoryScene(self)
-
-        elif scene_name == "death":
-            from scenes.core.death import DeathScene
-            self.current_scene = DeathScene(self)
-
-        elif scene_name == "tutorial":
-            from scenes.core.tutorial import TutorialScene
-            tutorial_data = kwargs.get("tutorial_data")
-            next_scene = kwargs.get("next_scene", "village")
-            self.current_scene = TutorialScene(self, tutorial_data, next_scene)
-
-        elif scene_name == "stats":
-            from scenes.core.stats import StatsScene
-            self.current_scene = StatsScene(self)
-
-        elif scene_name == "inventory":
-            from scenes.core.inventory import InventoryScene
-            self.current_scene = InventoryScene(self)
-
-        elif scene_name == "battle_log":
-            from scenes.core.battle_log_scene import BattleLogScene
-            self.current_scene = BattleLogScene(self)
-
-        elif scene_name == "skill_tree":
-            from scenes.core.skill_tree import SkillTreeScene
-            self.current_scene = SkillTreeScene(self)
-
-        elif scene_name == "admin":
-            from scenes.core.admin import AdminScene
-            self.current_scene = AdminScene(self)
-        elif scene_name == "achievements":
-            from scenes.core.achievements import AchievementsScene
-            self.current_scene = AchievementsScene(self)
-
-        elif scene_name == "perks":
-            from scenes.core.perks import PerksScene
-            self.current_scene = PerksScene(self)
-
-        elif scene_name == "bestiary":
-            from scenes.core.bestiary import BestiaryScene
-            self.current_scene = BestiaryScene(self)
-
-        elif scene_name == "daily_quests":
-            from scenes.core.daily_quests_scene import DailyQuestsScene
-            self.current_scene = DailyQuestsScene(self)
-
-        elif scene_name == "perk_shop":
-            from scenes.core.perk_shop import PerkShopScene
-            self.current_scene = PerkShopScene(self)
-
-        elif scene_name == "level_up":
-            from scenes.core.level_up import LevelUpScene
-            self.current_scene = LevelUpScene(self)
-
-        elif scene_name == "world_map":
-            from scenes.core.world_map import WorldMapScene
-            self.current_scene = WorldMapScene(self)
-
-        elif scene_name == "market":
-            from scenes.core.market import MarketScene
-            self.current_scene = MarketScene(self)
-
-        elif scene_name == "elder":
-            from scenes.core.elder import ElderScene
-            self.current_scene = ElderScene(self)
-
-        elif scene_name == "forest_event":
-            from scenes.core.forest_event import ForestEventScene
-            self.current_scene = ForestEventScene(self)
-
-        elif scene_name == "onboarding":
-            from scenes.core.onboarding import OnboardingScene
-            self.current_scene = OnboardingScene(self)
-
-        elif scene_name == "mine":
-            from scenes.core.mine import MineScene
-            self.current_scene = MineScene(self)
-
-        elif scene_name == "wanderer":
-            from scenes.core.wanderer import WandererScene
-            self.current_scene = WandererScene(self)
-
-        elif scene_name == "onboarding_reward_1":
-            # Після першого бою — нагорода і майстерня
-            from scenes.core.onboarding import OnboardingScene, _RewardScene
-            scene = OnboardingScene(self)
-            scene.stage = "reward_1"
-            scene._give_reward_1()
-            scene._sub = _RewardScene(scene)
-            self.current_scene = scene
-
-        elif scene_name == "onboarding_perk":
-            # Після другого бою — XP + слабкі перки
-            from scenes.core.onboarding import BATTLE2_XP, WEAK_PERK_IDS
-            p = self.player
-            xp_give = self.scene_data.pop("onboarding_battle2_xp", BATTLE2_XP)
-            p.xp += xp_give
-            while p.xp >= p.xp_next:
-                p.level_up()
-            from game.perk_system import PERKS
-            p.pending_perk_choices = [PERKS[pid] for pid in WEAK_PERK_IDS if pid in PERKS]
-            self.scene_data["onboarding_perk_first"] = True
-            autosave(p)
-            self._do_change_scene("level_up")
-
-        else:
-            log.warning("Невідома сцена: %s", scene_name)
-            return
-
-        # Викликаємо on_enter
         if self.current_scene:
             self.current_scene.on_enter()
+
+    def _build_scene(self, scene_name: str, kwargs: dict):
+        """Фабрика сцен. Повертає готовий об'єкт або None при помилці."""
+
+        # ── Спеціальні сцени зі складною побудовою ────────────────────────
+        if scene_name == "battle":
+            return self._build_battle_scene(kwargs)
+
+        if scene_name == "forest_battle":
+            # Одразу бій з гобліном (після туторіалу) — редірект
+            from game.enemy import make_goblin
+            self._do_change_scene("battle", enemy=make_goblin(), return_scene="forest")
+            return None  # on_enter викличеться рекурсивно
+
+        if scene_name == "tutorial":
+            return self._build_tutorial_scene(kwargs)
+
+        if scene_name == "onboarding_reward_1":
+            return self._build_onboarding_reward_1()
+
+        if scene_name == "onboarding_perk":
+            self._run_onboarding_perk()
+            return None  # on_enter викличеться через _do_change_scene("level_up")
+
+        # ── "Free battle" варіанти — той самий клас, але з маркером ──────
+        if scene_name in self._FREE_BATTLE_SCENES:
+            self.scene_data["from_battle"] = scene_name
+
+        # ── Звичайний реєстр ─────────────────────────────────────────────
+        registry = self._get_registry()
+        scene_cls = registry.get(scene_name)
+        if scene_cls is None:
+            log.warning("Невідома сцена: %s", scene_name)
+            return None
+
+        return scene_cls(self)
+
+    # ── Приватні фабричні методи для складних сцен ────────────────────────
+
+    def _build_battle_scene(self, kwargs: dict):
+        from scenes.core.battle_fighting import FightingBattleScene
+        return FightingBattleScene(
+            self,
+            kwargs.get("enemy"),
+            kwargs.get("return_scene", "village"),
+            kwargs.get("background_name"),
+        )
+
+    def _build_tutorial_scene(self, kwargs: dict):
+        from scenes.core.tutorial import TutorialScene
+        return TutorialScene(
+            self,
+            kwargs.get("tutorial_data"),
+            kwargs.get("next_scene", "village"),
+        )
+
+    def _build_onboarding_reward_1(self):
+        from scenes.core.onboarding import OnboardingScene, _RewardScene
+        scene = OnboardingScene(self)
+        scene.stage = "reward_1"
+        scene._give_reward_1()
+        scene._sub = _RewardScene(scene)
+        return scene
+
+    def _run_onboarding_perk(self):
+        """Нараховує XP + перки після другого бою, потім іде на level_up."""
+        from scenes.core.onboarding import BATTLE2_XP, WEAK_PERK_IDS
+        from game.perk_system import PERKS
+        p = self.player
+        xp_give = self.scene_data.pop("onboarding_battle2_xp", BATTLE2_XP)
+        p.xp += xp_give
+        while p.xp >= p.xp_next:
+            p.level_up()
+        p.pending_perk_choices = [PERKS[pid] for pid in WEAK_PERK_IDS if pid in PERKS]
+        self.scene_data["onboarding_perk_first"] = True
+        autosave(p)
+        self._do_change_scene("level_up")
 
     def push_scene(self, scene_name: str, **kwargs):
         """Зберігає поточну сцену в стек і переходить до нової (з fade)."""
         if self._transition.busy:
             return
-        from game.transitions import DEFAULT_OUT, DEFAULT_IN
         self._transition.request(
             callback=lambda: self._do_push_scene(scene_name, **kwargs),
             duration=(DEFAULT_OUT, DEFAULT_IN),
@@ -357,7 +339,6 @@ class Game:
             return
         if not self.scene_stack:
             return
-        from game.transitions import DEFAULT_OUT, DEFAULT_IN
         self._transition.request(
             callback=self._do_pop_scene,
             duration=(DEFAULT_OUT, DEFAULT_IN),
@@ -522,8 +503,7 @@ class Game:
             self._transition.update(dt)
 
             # Малювання у virtual surface
-            from ui.constants import COLOR_BG
-            self._surface.fill(COLOR_BG)
+            self._surface.fill(self._color_bg)
 
             if self.current_scene:
                 self.current_scene.draw(self._surface)
@@ -536,15 +516,12 @@ class Game:
                         notif.draw(self._surface)
 
                 # Централізовані тост-сповіщення (поверх усього)
-                from ui.notifications import get_manager
-                nm = get_manager()
-                nm.update(dt)
-                nm.draw(self._surface)
+                self._notif_manager.update(dt)
+                self._notif_manager.draw(self._surface)
 
                 # Індикатор збереження
-                from game.save_indicator import update_save_indicator, draw_save_indicator
-                update_save_indicator(dt)
-                draw_save_indicator(self._surface)
+                self._update_save_indicator(dt)
+                self._draw_save_indicator(self._surface)
 
                 # Діалог підтвердження виходу — поверх всього
                 if self._exit_confirm and not self._exit_confirm.done:

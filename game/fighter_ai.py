@@ -1,10 +1,14 @@
 """
-AI супротивника для файтингу — з динамічними фазами.
+AI супротивника для файтингу — з динамічними фазами і телеграфуванням.
 
 Фази:
   PHASE_NORMAL  (HP > 60%) — стандартна поведінка
   PHASE_WOUNDED (60% > HP > 30%) — більше блокує, обережніший
   PHASE_RAGE    (HP < 30%) — агресивна атака, rush, рідкий блок
+
+Телеграфування:
+  Перед важким ударом ворог показує orange flash 0.28–0.45с.
+  Це вікно для Counter Stance або dodge гравця.
 """
 
 import random
@@ -79,6 +83,13 @@ class FighterAI:
             self.rush_threshold     = 0.35
             self.guard_after_hits   = 2
 
+        # Telegraph fields
+        self._telegraph_timer: float = 0.0
+        self._telegraph_armed: bool  = False
+        self._telegraph_mult:  float = 1.0
+        self._fake_timer:      float = 0.0
+        self._fake_cooldown:   float = 0.0
+
     def _update_phase(self):
         hp_pct = self.fighter.hp / max(1, self.fighter.max_hp)
         old = self.phase
@@ -107,6 +118,21 @@ class FighterAI:
         return self.attack_chance
 
     def update(self, dt: float, player: Fighter):
+        # Telegraph: заморожуємо рішення поки ворог "готується"
+        if self._telegraph_timer > 0:
+            self._telegraph_timer -= dt
+            if self._telegraph_timer <= 0 and self._telegraph_armed:
+                self._telegraph_armed = False
+                if self._telegraph_mult >= 1.5 and getattr(self.fighter, "has_attack3", False):
+                    self.fighter.attack3()
+                else:
+                    self.fighter.attack()
+                self.fighter._pending_heavy = True
+            return
+
+        if self._fake_cooldown > 0:
+            self._fake_cooldown -= dt
+
         self.decision_timer          += dt
         self.action_timer            -= dt
         self.player_last_attack_time += dt
@@ -214,6 +240,25 @@ class FighterAI:
         roll  = random.random()
         has3  = getattr(self.fighter, "has_attack3", False)
         bonus = 0.15 if self.phase == self.PHASE_RAGE else 0.0
+
+        # Telegraph перед важким ударом
+        use_telegraph = (
+            self.difficulty != self.DIFFICULTY_EASY
+            and self._telegraph_timer <= 0
+            and roll < (0.35 if self.difficulty == self.DIFFICULTY_MEDIUM else 0.20)
+        )
+
+        if use_telegraph:
+            pose_time = 0.45 if self.difficulty == self.DIFFICULTY_MEDIUM else 0.28
+            self._telegraph_timer = pose_time
+            self._telegraph_armed = True
+            self._telegraph_mult  = 1.6
+            # Оранжевий flash — сигнал для гравця
+            self.fighter._flash_timer = pose_time
+            self.fighter._flash_color = (255, 100, 40)
+            self.action_timer = pose_time + 0.1
+            return
+
         if has3 and roll < self.use_attack3_chance + bonus:
             self.current_action = "attack3"
         elif roll < self.use_attack2_chance + bonus:
@@ -276,7 +321,6 @@ class FighterAI:
         self.action_timer      = 0
         self.decision_timer    = self.reaction_time * 0.5
 
-        # Skirmisher: після вдалого удару — відступ
         if getattr(self, "_skirmisher", False) and self.retreat_cooldown <= 0:
             self.current_action   = "retreat"
             self.action_timer     = 0.4
@@ -290,7 +334,6 @@ class FighterAI:
             self._guard_break_timer     = 0.8
             self.fighter.stop_block()
 
-        # Defensive: зупинив блок — одразу контратакує
         if (getattr(self, "_counter_after_block", False)
                 and self.fighter.is_blocking
                 and self.fighter.can_attack):
@@ -299,48 +342,43 @@ class FighterAI:
 
 
 def create_enemy_ai(fighter: Fighter, enemy_name: str,
-                    behavior: str = "balanced") -> FighterAI:
-    enemy_lower = enemy_name.lower()
-
-    # Базова складність за типом
-    if "гоблін" in enemy_lower or "goblin" in enemy_lower:
-        ai = FighterAI(fighter, FighterAI.DIFFICULTY_EASY)
-    elif "орк" in enemy_lower or "orc" in enemy_lower:
-        ai = FighterAI(fighter, FighterAI.DIFFICULTY_MEDIUM)
-    elif "лицар" in enemy_lower or "knight" in enemy_lower:
-        ai = FighterAI(fighter, FighterAI.DIFFICULTY_HARD)
-    elif "дракон" in enemy_lower or "dragon" in enemy_lower:
-        ai = FighterAI(fighter, FighterAI.DIFFICULTY_HARD)
+                    behavior: str = "balanced",
+                    enemy_level: int = 1) -> FighterAI:
+    """
+    Створює AI для ворога.
+    Складність визначається рівнем ворога, а не парсингом імені.
+    """
+    if enemy_level <= 2:
+        difficulty = FighterAI.DIFFICULTY_EASY
+    elif enemy_level <= 5:
+        difficulty = FighterAI.DIFFICULTY_MEDIUM
     else:
-        ai = FighterAI(fighter, FighterAI.DIFFICULTY_MEDIUM)
+        difficulty = FighterAI.DIFFICULTY_HARD
 
-    # ── Патерн поведінки поверх складності ──────────────────
+    ai = FighterAI(fighter, difficulty)
+
     if behavior == "skirmisher":
-        # Гоблін: швидкий, тримає дистанцію, б'є і відступає
-        ai.decision_interval  *= 0.7     # реагує швидше
+        ai.decision_interval  *= 0.7
         ai.attack_chance      *= 1.2
         ai.retreat_cooldown    = 0.0
-        ai.rush_threshold      = 0.0     # ніколи не рашить
-        ai._skirmisher         = True    # flee після удару
+        ai.rush_threshold      = 0.0
+        ai._skirmisher         = True
 
     elif behavior == "berserker":
-        # Орк: повільний, але важкі удари, майже не блокує
         ai.block_chance       *= 0.35
         ai.attack_chance      *= 1.15
-        ai.decision_interval  *= 1.3     # повільне прийняття рішень
-        ai.use_attack3_chance  = 0.45    # часто важка атака
-        ai.rush_threshold      = 0.40    # рашить навіть в normal фазі
+        ai.decision_interval  *= 1.3
+        ai.use_attack3_chance  = 0.45
+        ai.rush_threshold      = 0.40
 
     elif behavior == "defensive":
-        # Лицар: чекає, часто блокує, контратакує після блоку
         ai.block_chance       *= 1.6
         ai.attack_chance      *= 0.75
         ai.retreat_cooldown    = 0.5
         ai.guard_after_hits    = max(ai.guard_after_hits, 4)
-        ai._counter_after_block = True   # атакує одразу після зупинки блоку
+        ai._counter_after_block = True
 
     elif behavior == "aggressive":
-        # Дракон: постійно атакує, rush дуже часто
         ai.attack_chance      *= 1.4
         ai.block_chance       *= 0.4
         ai.rush_threshold      = 0.60

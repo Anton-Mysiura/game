@@ -3,12 +3,17 @@
 """
 
 import random
+import time as _time
 from typing import Optional
 from .data import Item, Blueprint, OwnedBlueprint, ITEMS, make_weapon_from_blueprint
 from .hero_roster import HeroRoster
 from .perk_system import Perk, roll_perks
 from .location_bonuses import calc_bonus_total
 from .daily_quests import DailyQuestManager
+from .crafting_queue import CraftingQueue, DismantleQueue, CraftOrder
+from .crafting_queue import dismantle_cost, dismantle_time, fmt_time
+from .crafting_queue import roll_dismantle_materials
+from .market import Market
 
 
 class Player:
@@ -43,12 +48,6 @@ class Player:
         self.save_name: str = "Default"
         self.hero_roster: HeroRoster = HeroRoster.new_game()
 
-        @property
-        def character_id(self) -> str:
-            """Зворотна сумісність — повертає hero_id активного героя."""
-            h = self.hero_roster.active_hero
-            return h.hero_id if h else "player"
-
         # ── Прогрес локацій ──
         self.locations_visited: set[str] = {"village"}  # село відкрито одразу
         self.perks: list[str] = []              # список отриманих perk_id
@@ -70,12 +69,10 @@ class Player:
         self.quests_done:   set[str] = set()   # завершені
 
         # ── Черга крафту ──
-        from .crafting_queue import CraftingQueue, DismantleQueue
         self.crafting_queue  = CraftingQueue()
         self.dismantle_queue = DismantleQueue()
 
         # ── Ринок ──
-        from .market import Market
         self.market = Market()
         self.daily_quests = DailyQuestManager()
         self.daily_quests.refresh_if_needed()
@@ -111,6 +108,12 @@ class Player:
         self._ob_forest_trips: int  = 0
 
     # ── Властивості ──
+
+    @property
+    def character_id(self) -> str:
+        """Зворотна сумісність — повертає hero_id активного героя."""
+        h = self.hero_roster.active_hero
+        return h.hero_id if h else "player"
 
     @property
     def total_attack(self) -> int:
@@ -353,10 +356,8 @@ class Player:
 
         # Визначаємо час крафту і стартуємо
         seconds = calc_craft_time(recipe)
-        import time as _t
-        finish_at = _t.time() + seconds
+        finish_at = _time.time() + seconds
 
-        from .crafting_queue import CraftOrder
         order = CraftOrder(
             blueprint_id="free_craft",
             finish_at=finish_at,
@@ -386,7 +387,6 @@ class Player:
         Знімає монети і видаляє предмет з інвентарю.
         Повертає (ok, повідомлення).
         """
-        from .crafting_queue import dismantle_cost, dismantle_time, fmt_time
         from .save_manager import _serialize_item
 
         if item not in self.inventory:
@@ -419,7 +419,6 @@ class Player:
         Повертає список (item_name, {mat_id: qty}) для кожного завершеного.
         """
         from .save_manager import _deserialize_item
-        from .crafting_queue import roll_dismantle_materials
         done_data = self.dismantle_queue.collect_done()
         results = []
         for d in done_data:

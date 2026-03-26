@@ -70,6 +70,9 @@ class BattleDrawMixin:
             surf.blit(vign, (0, 0))
 
         self._draw_ui(surf)
+        # Skill bar + Focus bar
+        if hasattr(self, 'skill_bar') and hasattr(self, 'focus'):
+            self.skill_bar.draw(surf, self.focus, SCREEN_WIDTH, SCREEN_HEIGHT)
         self._draw_inline_log(surf)
         self._draw_action_hints(surf)
 

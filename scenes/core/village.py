@@ -117,15 +117,6 @@ class VillageScene(SceneWithBackground, SceneWithButtons):
                    lambda: self.game.push_scene("stats")),
             Button(SCREEN_WIDTH - 230, 70, 200, 40, "🎒 Інвентар",
                    lambda: self.game.push_scene("inventory")),
-            Button(SCREEN_WIDTH - 230, 120, 200, 40, "💾 Зберегти",
-                   lambda: self._save_game()),
-        ])
-        # Кнопки управління
-        self.buttons.extend([
-            Button(SCREEN_WIDTH - 230, 20, 200, 40, "📊 Характеристики",
-                   lambda: self.game.push_scene("stats")),
-            Button(SCREEN_WIDTH - 230, 70, 200, 40, "🎒 Інвентар",
-                   lambda: self.game.push_scene("inventory")),
             Button(SCREEN_WIDTH - 230, 120, 200, 40, "🏆 Досягнення",
                    lambda: self.game.push_scene("achievements")),
             Button(SCREEN_WIDTH - 230, 170, 200, 40, "✨ Перки",

@@ -3,7 +3,9 @@
 """
 
 import logging
+import math
 import random
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pygame
@@ -14,6 +16,21 @@ from ui.constants import ANIMATIONS_DIR
 from game.sound_manager import sounds
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class DamageNumber:
+    """Число шкоди що спливає над бійцем."""
+    value:    int
+    x:        float
+    y:        float
+    vy:       float
+    timer:    float
+    color:    tuple
+    blocked:  bool  = False
+    is_crit:  bool  = False
+    is_miss:  bool  = False
+    is_bleed: bool  = False
 
 
 class Fighter:
@@ -31,110 +48,142 @@ class Fighter:
     STATE_JUMPING   = "jumping"
     STATE_DODGING   = "dodging"
 
+    # Кешовані шрифти — ініціалізуються один раз при першому використанні
+    _font_fallback: pygame.font.Font | None = None
+    _font_combo:    pygame.font.Font | None = None
+    _font_dmg_big:  pygame.font.Font | None = None
+    _font_dmg_sm:   pygame.font.Font | None = None
+    _font_dmg_crit: pygame.font.Font | None = None
+    _font_dmg_miss: pygame.font.Font | None = None
+    _font_rage:     pygame.font.Font | None = None
+
+    @classmethod
+    def _init_fonts(cls):
+        """Ліниво ініціалізує шрифти один раз для всього класу."""
+        if cls._font_combo is not None:
+            return
+        cls._font_fallback = pygame.font.Font(None, 20)
+        cls._font_combo    = pygame.font.Font(None, 52)
+        cls._font_dmg_big  = pygame.font.Font(None, 42)
+        cls._font_dmg_sm   = pygame.font.Font(None, 30)
+        cls._font_dmg_crit = pygame.font.Font(None, 52)
+        cls._font_dmg_miss = pygame.font.Font(None, 36)
+        cls._font_rage     = pygame.font.Font(None, 18)
+
     def __init__(self, space: pymunk.Space, x: float, y: float,
                  name: str, is_player: bool = True, character_id: str = "player"):
-        self.space = space
-        self.name = name
-        self.is_player = is_player
+        self.space        = space
+        self.name         = name
+        self.is_player    = is_player
         self.character_id = character_id
-        self.facing_right = is_player  # Гравець дивиться вправо, ворог вліво
+        self.facing_right = is_player  # гравець дивиться вправо, ворог вліво
+        self.player_data  = None       # встановлюється зовні для перків
 
-        # Характеристики
-        self.hp = 100
-        self.max_hp       = 100
-        self.energy       = 100
-        self.max_energy   = 100
-        self._energy_regen = 18.0   # одиниць/сек (базово)
+        self._setup_stats()
+        self._setup_physics(x, y)
+        self._setup_combat()
+        self._setup_movement()
+        self._setup_visuals()
 
-        # Стан
-        self.state = self.STATE_IDLE
-        self.can_move = True
-        self.can_attack = True
-        self.is_blocking = False
-        self.is_grounded = True
-
-        # Фізичне тіло (прямокутник)
-        mass = 70
-        size = (40, 100)
-        moment = pymunk.moment_for_box(mass, size)
-        self.body = pymunk.Body(mass, moment)
-        self.body.position = x, y
-
-        # Форма (collision shape)
-        self.shape = pymunk.Poly.create_box(self.body, size)
-        self.shape.friction = 0.8
-        self.shape.collision_type = 1 if is_player else 2
-        self.shape.filter = pymunk.ShapeFilter(categories=0b1 if is_player else 0b10)
-
-        self.space.add(self.body, self.shape)
-
-        # Хітбокс атаки
-        self.attack_hitbox: Optional[pymunk.Shape] = None
-        self.attack_damage = 15
-        self.attack_active = False
-
-        # Посилання на дані гравця (для перків), None для ворога
-        self.player_data = None
-
-        # Стан ефектів від перків
-        self.stun_timer  = 0.0      # оглушення
-        self.burn_timer  = 0.0      # підпалення
-        self.bleed_timer = 0.0      # кровотеча
-
-        # ── Ухилення (dodge / перекат) ─────────────────────────
-        self.dodge_cooldown   = 0.0    # кулдаун між ухиленнями
-        self.dodge_timer      = 0.0    # тривалість поточного ухилення
-        self.dodge_iframes    = 0.0    # залишок невразливості (i-frames)
-        self.DODGE_DURATION   = 0.35   # сек
-        self.DODGE_IFRAMES    = 0.28   # сек невразливості
-        self.DODGE_COOLDOWN   = 0.9    # кулдаун між роллами
-        self.DODGE_SPEED      = 480    # швидкість перекату
-
-        # ── Заряджений удар ────────────────────────────────────
-        self._charge_held     = 0.0    # скільки тримаємо J
-        self.CHARGE_THRESHOLD = 0.6    # мінімум для зарядженого удару
-        self._charge_ready    = False  # чи досягнуто порогу (для UI)
-
-        # ── Парирування / контратака ───────────────────────────
-        self.parry_window     = 0.0    # залишок вікна парирування
-        self.PARRY_WINDOW     = 0.18   # сек після отримання удару
-        self._just_parried    = False  # флаг для колізії
-
-        # Анімації
         self.anim_controller = AnimationController()
         self._load_animations()
 
-        # Таймери
+    # ── Ініціалізація по групах ────────────────────────────────────────────
+
+    def _setup_stats(self):
+        """Бойові характеристики (HP, енергія, захист)."""
+        self.hp            = 100
+        self.max_hp        = 100
+        self.energy        = 100
+        self.max_energy    = 100
+        self._energy_regen = 18.0   # одиниць/сек
+        self.defense       = 5
+        self.attack_damage = 15
+
+    def _setup_physics(self, x: float, y: float):
+        """Фізичне тіло pymunk."""
+        mass   = 70
+        size   = (40, 100)
+        moment = pymunk.moment_for_box(mass, size)
+        self.body          = pymunk.Body(mass, moment)
+        self.body.position = x, y
+
+        self.shape                = pymunk.Poly.create_box(self.body, size)
+        self.shape.friction       = 0.8
+        self.shape.collision_type = 1 if self.is_player else 2
+        self.shape.filter         = pymunk.ShapeFilter(
+            categories=0b1 if self.is_player else 0b10
+        )
+        self.space.add(self.body, self.shape)
+
+    def _setup_combat(self):
+        """Стан бою: кулдауни, хітбокс, ефекти, комбо, парирування."""
+        # Стан машини станів
+        self.state       = self.STATE_IDLE
+        self.can_move    = True
+        self.can_attack  = True
+        self.is_blocking = False
+        self.is_grounded = True
+
+        # Хітбокс атаки
+        self.attack_hitbox: Optional[pymunk.Shape] = None
+        self.attack_active = False
+
+        # Кулдауни
         self.attack_cooldown = 0.0
         self.block_cooldown  = 0.0
         self.hit_stun        = 0.0
 
-        # Захист
-        self.defense = 5
-
-        # Числа шкоди
-        self.damage_numbers = []
+        # Ефекти від перків
+        self.stun_timer  = 0.0
+        self.burn_timer  = 0.0
+        self.bleed_timer = 0.0
+        self._burn_tick  = 0.0   # ініціалізуємо явно, без hasattr
+        self._bleed_tick = 0.0
 
         # Комбо
-        self.combo_count   = 0
-        self.last_hit_crit = False
-        self.combo_timer   = 0.0
-        self.combo_window  = 1.2   # секунд між ударами
-        self.max_combo     = 0
-        self.combo_display_timer = 0.0  # скільки показувати напис
+        self.combo_count         = 0
+        self.last_hit_crit       = False
+        self.combo_timer         = 0.0
+        self.combo_window        = 1.2
+        self.max_combo           = 0
+        self.combo_display_timer = 0.0
 
-        # ── Візуальні ефекти ──────────────────────────────────
-        # Flash при отриманні урону
-        self._flash_timer   = 0.0   # залишок секунд блимання
-        self._flash_color   = (255, 60, 60)  # червоний за замовчуванням
+        # Rage mode (ворог <30% HP)
+        self.rage_mode   = False
+        self._rage_pulse = 0.0
 
-        # Плавний HP бар (displayed_hp доганяє реальний hp)
-        self.displayed_hp: float = float(self.max_hp)
-        self._hp_drain_speed = 0.0   # HP/сек що зменшується плавно
+    def _setup_movement(self):
+        """Ухилення, заряджений удар, парирування."""
+        # Ухилення
+        self.dodge_cooldown = 0.0
+        self.dodge_timer    = 0.0
+        self.dodge_iframes  = 0.0
+        self.DODGE_DURATION = 0.35
+        self.DODGE_IFRAMES  = 0.28
+        self.DODGE_COOLDOWN = 0.9
+        self.DODGE_SPEED    = 480
 
-        # Rage mode (ворог на <30% HP)
-        self.rage_mode     = False
-        self._rage_pulse   = 0.0    # таймер для пульсації кольору
+        # Заряджений удар
+        self._charge_held     = 0.0
+        self.CHARGE_THRESHOLD = 0.6
+        self._charge_ready    = False
+
+        # Парирування
+        self.parry_window  = 0.0
+        self.PARRY_WINDOW  = 0.18
+        self._just_parried = False
+
+    def _setup_visuals(self):
+        """Візуальні ефекти: flash, damage numbers, HP-бар."""
+        self.damage_numbers = []
+
+        self._flash_timer = 0.0
+        self._flash_color = (255, 60, 60)
+
+        # Плавний HP бар
+        self.displayed_hp    = float(self.max_hp)
+        self._hp_drain_speed = 0.0
 
     def _load_animations(self):
         """
@@ -630,7 +679,7 @@ class Fighter:
         if is_miss:
             color = (160, 200, 255)
         elif is_bleed:
-            color = (180, 30, 30)    # темно-червоний для кровотечі
+            color = (180, 30, 30)
         elif is_crit:
             color = (20, 20, 20)
         elif blocked:
@@ -639,26 +688,26 @@ class Fighter:
             color = (255, 200, 0)
         else:
             color = (255, 80, 80)
-        self.damage_numbers.append({
-            "value":    value,
-            "x":        float(x),
-            "y":        float(y),
-            "vy":       -150.0 if is_crit else -90.0,
-            "timer":    1.5 if is_crit else 1.2,
-            "color":    color,
-            "blocked":  blocked,
-            "is_crit":  is_crit,
-            "is_miss":  is_miss,
-            "is_bleed": is_bleed,
-        })
+        self.damage_numbers.append(DamageNumber(
+            value=value,
+            x=float(x),
+            y=float(y),
+            vy=-150.0 if is_crit else -90.0,
+            timer=1.5 if is_crit else 1.2,
+            color=color,
+            blocked=blocked,
+            is_crit=is_crit,
+            is_miss=is_miss,
+            is_bleed=is_bleed,
+        ))
 
     def _update_damage_numbers(self, dt: float):
         """Оновлює позиції чисел шкоди."""
         for num in self.damage_numbers:
-            num["y"] += num["vy"] * dt
-            num["vy"] *= 0.92  # уповільнення
-            num["timer"] -= dt
-        self.damage_numbers = [n for n in self.damage_numbers if n["timer"] > 0]
+            num.y  += num.vy * dt
+            num.vy *= 0.92  # уповільнення
+            num.timer -= dt
+        self.damage_numbers = [n for n in self.damage_numbers if n.timer > 0]
 
     def get_attack_damage_multiplier(self) -> float:
         """Повертає загальний множник шкоди з урахуванням комбо та перків."""
@@ -699,7 +748,7 @@ class Fighter:
         hitbox_shape.sensor = True  # Не блокує рух
         hitbox_shape.collision_type = 3  # Тип "атака"
 
-        hitbox_shape.damage_multiplier = self._attack_damage_multiplier if hasattr(self, "_attack_damage_multiplier") else 1.0
+        hitbox_shape.damage_multiplier = damage_multiplier
         self.attack_hitbox = hitbox_shape
         self.attack_active = True
         self.space.add(hitbox_body, hitbox_shape)
@@ -724,36 +773,45 @@ class Fighter:
             self.anim_controller.play("idle")
 
     def update(self, dt: float, ground_y: float = 550):
+        """Оновлення бійця: делегує кожній підсистемі."""
         self._update_damage_numbers(dt)
+        self._update_resources(dt)
+        self._update_timers(dt)
+        self._update_status_effects(dt)
+        self._update_state_machine(dt, ground_y)
 
-        # ── Енергія — регенерація ──────────────────────────────
+    # ── Підсистеми update ─────────────────────────────────────────────────
+
+    def _update_resources(self, dt: float):
+        """Регенерація енергії + плавний HP бар + flash + rage."""
+        # Енергія
         if self.energy < self.max_energy:
             regen = self._energy_regen
-            # Під час ухилення або заряду — рег уповільнений
             if self.state == self.STATE_DODGING or self._charge_held > 0:
                 regen *= 0.3
             self.energy = min(self.max_energy, self.energy + regen * dt)
 
-        # ── Плавний HP бар ─────────────────────────────────────
+        # Плавний HP бар
         if self.displayed_hp > self.hp:
             drain = max(30, (self.displayed_hp - self.hp) * 4) * dt
             self.displayed_hp = max(float(self.hp), self.displayed_hp - drain)
         else:
             self.displayed_hp = float(self.hp)
 
-        # ── Flash таймер ───────────────────────────────────────
+        # Flash таймер
         if self._flash_timer > 0:
             self._flash_timer -= dt
 
-        # ── Rage mode (ворог <30% HP → +30% атаки) ────────────
+        # Rage mode (ворог <30% HP → +30% атаки)
         if not self.is_player:
-            in_rage = self.hp > 0 and (self.hp / self.max_hp) < 0.30
-            if in_rage and not self.rage_mode:
-                self.rage_mode       = True
-                self.attack_damage   = int(self.attack_damage * 1.30)
+            if self.hp > 0 and (self.hp / self.max_hp) < 0.30 and not self.rage_mode:
+                self.rage_mode     = True
+                self.attack_damage = int(self.attack_damage * 1.30)
             self._rage_pulse = (self._rage_pulse + dt * 4) % (2 * 3.14159)
 
-        # ── Ухилення ───────────────────────────────────────────
+    def _update_timers(self, dt: float):
+        """Усі кулдауни та вікна: ухилення, парирування, заряд, комбо."""
+        # Ухилення
         if self.dodge_cooldown > 0:
             self.dodge_cooldown -= dt
         if self.dodge_iframes > 0:
@@ -761,24 +819,20 @@ class Fighter:
         if self.dodge_timer > 0:
             self.dodge_timer -= dt
             if self.dodge_timer <= 0:
-                # Завершення перекату
                 self.body.velocity = (0, self.body.velocity.y)
                 self._return_to_idle()
 
-        # ── Парирування — вікно після отримання удару ──────────
+        # Парирування
         if self.parry_window > 0:
             self.parry_window -= dt
 
-        # ── Заряд — пульс кольору ──────────────────────────────
+        # Заряд — помаранчеве миготіння
         if self._charge_held > 0 and not self._charge_ready:
-            # Легке помаранчеве миготіння поки заряджаємо
-            import math
-            pulse = (math.sin(self._charge_held * 20) + 1) / 2
-            if pulse > 0.7:
+            if (math.sin(self._charge_held * 20) + 1) / 2 > 0.7:
                 self._flash_timer = 0.04
                 self._flash_color = (255, 160, 40)
 
-        # Комбо таймер
+        # Комбо
         if self.combo_timer > 0:
             self.combo_timer -= dt
             if self.combo_timer <= 0:
@@ -786,41 +840,38 @@ class Fighter:
         if self.combo_display_timer > 0:
             self.combo_display_timer -= dt
 
-        # Оглушення (stun)
+    def _update_status_effects(self, dt: float):
+        """Тік стану: оглушення, підпалення, кровотеча."""
+        # Оглушення
         if self.stun_timer > 0:
             self.stun_timer -= dt
-            self.can_move = False
+            self.can_move   = False
             self.can_attack = False
 
-        # Підпалення (burn) — шкода кожні 0.5 сек
+        # Підпалення — 3% max_hp кожні 0.5 сек
         if self.burn_timer > 0:
-            self.burn_timer -= dt
-            if not hasattr(self, "_burn_tick"):
-                self._burn_tick = 0.0
-            self._burn_tick += dt
+            self.burn_timer  -= dt
+            self._burn_tick  += dt
             if self._burn_tick >= 0.5:
                 self._burn_tick = 0.0
                 burn_dmg = max(1, int(self.max_hp * 0.03))
-                self.hp = max(0, self.hp - burn_dmg)
-                self._spawn_damage_number(burn_dmg, blocked=False, is_crit=False)
+                self.hp  = max(0, self.hp - burn_dmg)
+                self._spawn_damage_number(burn_dmg)
 
-        # Кровотеча (bleed) — урон щосекунди, стек не обнуляє рух
+        # Кровотеча — 4% max_hp щосекунди
         if self.bleed_timer > 0:
             self.bleed_timer -= dt
-            if not hasattr(self, "_bleed_tick"):
-                self._bleed_tick = 0.0
             self._bleed_tick += dt
             if self._bleed_tick >= 1.0:
                 self._bleed_tick = 0.0
                 bleed_dmg = max(1, int(self.max_hp * 0.04))
-                self.hp = max(0, self.hp - bleed_dmg)
-                self._spawn_damage_number(bleed_dmg, blocked=False,
-                                          is_crit=False, is_bleed=True)
-                # Короткий червоний flash
+                self.hp   = max(0, self.hp - bleed_dmg)
+                self._spawn_damage_number(bleed_dmg, is_bleed=True)
                 self._flash_timer = 0.07
-                self._flash_color  = (200, 0, 0)
+                self._flash_color = (200, 0, 0)
 
-        """Оновлення бійця."""
+    def _update_state_machine(self, dt: float, ground_y: float):
+        """Анімації, кулдауни атаки/блоку, приземлення, обмеження швидкості."""
         self.anim_controller.update(dt)
 
         if self.attack_cooldown > 0:
@@ -848,17 +899,11 @@ class Fighter:
             if not self.anim_controller.current_name.startswith("idle"):
                 self.anim_controller.play("idle")
 
-        vel_y = self.body.velocity.y
-        pos_y = self.body.position.y
-
-        # is_grounded тільки якщо близько до підлоги І швидкість мала
-        prev_grounded = self.is_grounded
-        self.is_grounded = (pos_y >= ground_y - 20) and abs(vel_y) < 80
-
         # Приземлення
-        if self.is_grounded and not prev_grounded:
-            if self.state == self.STATE_JUMPING:
-                self._return_to_idle()
+        prev_grounded    = self.is_grounded
+        self.is_grounded = (self.body.position.y >= ground_y - 20) and abs(self.body.velocity.y) < 80
+        if self.is_grounded and not prev_grounded and self.state == self.STATE_JUMPING:
+            self._return_to_idle()
 
         # Обмеження горизонтальної швидкості
         vx = self.body.velocity.x
@@ -884,7 +929,8 @@ class Fighter:
             pygame.draw.rect(screen, (255, 255, 255), rect, 3)
 
             # Ім'я
-            font = pygame.font.Font(None, 20)
+            self._init_fonts()
+            font = self._font_fallback
             text = font.render(self.name, True, (255, 255, 255))
             screen.blit(text, (rect.x, rect.y - 20))
 
@@ -892,11 +938,11 @@ class Fighter:
             return
 
         # Є кадр — малюємо його
-        display_frame = frame
-
-        # Відзеркалюємо якщо дивимося вліво
+        # Відзеркалюємо якщо дивимося вліво (використовуємо кеш)
         if not self.facing_right:
-            display_frame = pygame.transform.flip(frame, True, False)
+            display_frame = self.anim_controller.get_flipped_frame() or frame
+        else:
+            display_frame = frame
 
         # Розраховуємо позицію (центруємо по тілу)
         x = int(self.body.position.x - display_frame.get_width() // 2 + camera_offset[0])
@@ -926,7 +972,8 @@ class Fighter:
     def _draw_combo_label(self, screen: pygame.Surface, camera_offset: tuple):
         """Малює напис COMBO xN над бійцем."""
         alpha = min(255, int(255 * min(1.0, self.combo_display_timer / 0.4)))
-        font = pygame.font.Font(None, 52)
+        self._init_fonts()
+        font = self._font_combo
         label = f"COMBO x{self.combo_count}!"
         surf = font.render(label, True, (255, 220, 0))
         surf.set_alpha(alpha)
@@ -941,37 +988,35 @@ class Fighter:
         """Малює числа шкоди що спливають."""
         if not sounds.show_damage_numbers:
             return
-        font_big  = pygame.font.Font(None, 42)
-        font_sm   = pygame.font.Font(None, 30)
-        font_crit = pygame.font.Font(None, 52)
-        font_miss = pygame.font.Font(None, 36)
+        self._init_fonts()
+        font_big  = self._font_dmg_big
+        font_sm   = self._font_dmg_sm
+        font_crit = self._font_dmg_crit
+        font_miss = self._font_dmg_miss
         for num in self.damage_numbers:
-            max_t = 1.5 if num.get("is_crit") else 1.2
-            alpha = min(255, int(255 * (num["timer"] / max_t)))
-            x = int(num["x"] + camera_offset[0])
-            y = int(num["y"] + camera_offset[1])
-            is_crit = num.get("is_crit", False)
-            is_miss  = num.get("is_miss", False)
-            is_bleed = num.get("is_bleed", False)
+            max_t = 1.5 if num.is_crit else 1.2
+            alpha = min(255, int(255 * (num.timer / max_t)))
+            x = int(num.x + camera_offset[0])
+            y = int(num.y + camera_offset[1])
 
-            if is_miss:
+            if num.is_miss:
                 font  = font_miss
                 label = "МИМО"
                 shadow_color = (0, 0, 0)
-            elif is_bleed:
+            elif num.is_bleed:
                 font  = font_sm
-                label = f"🩸{num['value']}"
+                label = f"🩸{num.value}"
                 shadow_color = (0, 0, 0)
-            elif is_crit:
+            elif num.is_crit:
                 font  = font_crit
-                label = f'КРИТ! {num["value"]}'
+                label = f"КРИТ! {num.value}"
                 shadow_color = (200, 200, 200)
             else:
-                font  = font_big if num["value"] >= 20 else font_sm
-                label = "БЛОК" if num["blocked"] and num["value"] == 0 else str(num["value"])
+                font  = font_big if num.value >= 20 else font_sm
+                label = "БЛОК" if num.blocked and num.value == 0 else str(num.value)
                 shadow_color = (0, 0, 0)
 
-            surf   = font.render(label, True, num["color"])
+            surf   = font.render(label, True, num.color)
             surf.set_alpha(alpha)
             shadow = font.render(label, True, shadow_color)
             shadow.set_alpha(alpha // 2)
@@ -980,7 +1025,6 @@ class Fighter:
 
     def _draw_hp_bar(self, screen: pygame.Surface, camera_offset: tuple):
         """Малює HP бар і бар енергії над головою."""
-        import math
         bar_width  = 80
         bar_height = 8
         x = int(self.body.position.x - bar_width // 2 + camera_offset[0])
@@ -1011,7 +1055,8 @@ class Fighter:
 
         # Rage іконка
         if self.rage_mode:
-            font    = pygame.font.Font(None, 18)
+            self._init_fonts()
+            font    = self._font_rage
             pulse_a = int(200 + 55 * abs(math.sin(self._rage_pulse)))
             rs = font.render("RAGE!", True, (255, 80, 40))
             rs.set_alpha(pulse_a)

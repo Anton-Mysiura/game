@@ -3,16 +3,33 @@
 """
 
 import random
+import time
+import logging
 import pygame
 import pymunk
+
 from .base import Scene
 from .battle_ui import BattleUIMixin
 from .battle_pause import BattlePauseMixin
+# Draw-методи винесено у battle_draw.py — тут тільки логіка: стан, AI, фізика бою
+from scenes.core.battle_draw import BattleDrawMixin
+
+from ui.assets import assets
 from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT
+from ui.notifications import notify
+
+from game.achievements import AchievementManager
+from game.battle_log import BattleLogger
+from game.boss_phases import BossPhaseManager
+from game.data import MATERIALS
+from game.enemy import Enemy
 from game.fighter import Fighter
 from game.fighter_ai import create_enemy_ai
-from game.enemy import Enemy
 from game.save_manager import autosave
+from game.skills import SkillBar, FocusBar, CounterStance, default_loadout
+from game.sound_manager import sounds
+
+log = logging.getLogger(__name__)
 
 # ── Константи меню вибору дій ─────────────────────────────────
 ACTION_ATTACK = "attack"   # J — звичайна атака
@@ -27,16 +44,15 @@ ACTION_HINTS = {
     ACTION_DEFEND: ("[K] Захист",  (100, 180, 255)),
     ACTION_ITEM:   ("[I] Зілля",   (100, 220, 120)),
 }
-from game.achievements import AchievementManager
-import logging
-from game.sound_manager import sounds
-from game.battle_log import BattleLogger
-log = logging.getLogger(__name__)
 
-
-# Draw-методи винесено у battle_draw.py
-# Тут тільки логіка: стан, AI, фізика бою
-from scenes.core.battle_draw import BattleDrawMixin
+# ── Бойові константи ──────────────────────────────────────────
+HEAVY_DAMAGE_MULT = 1.8    # множник урону важкого удару
+HEAVY_MISS_BONUS  = 0.20   # додатковий шанс промаху для важкого удару
+BLOCK_REDUCTION   = 0.40   # частка урону що проходить крізь блок
+LIFESTEAL_RATE    = 0.20   # частка урону що повертається як HP
+HIT_RANGE         = 60     # радіус (px) для реєстрації влучання
+ARENA_MARGIN      = 60     # відступ від краю екрану для обмеження арени
+FINISH_FLASH_TIME = 1.8    # тривалість фінішного флешу (секунди)
 
 
 class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scene):
@@ -52,8 +68,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         self.background_name = background_name
         self.background_surface = None
         if background_name:
-            from ui.assets import assets
-            from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT
             self.background_surface = assets.load_texture(
                 "locations", background_name, (SCREEN_WIDTH, SCREEN_HEIGHT)
             )
@@ -70,7 +84,8 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         # AI супротивника
         self.enemy_ai = create_enemy_ai(
             self.enemy_fighter, enemy.name,
-            behavior=getattr(enemy, "behavior", "balanced")
+            behavior=getattr(enemy, "behavior", "balanced"),
+            enemy_level=getattr(enemy, "level", 1),
         )
 
         # Стан бою
@@ -128,7 +143,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         self._boss_phase_mgr = None
         _beh = getattr(self.enemy_data, "behavior", "")
         if getattr(self.enemy_data, "is_boss", False) or "дракон" in self.enemy_data.name.lower():
-            from game.boss_phases import BossPhaseManager
             self._boss_phase_mgr = BossPhaseManager(
                 self.enemy_fighter, self.enemy_data, self)
 
@@ -153,6 +167,10 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         self._j_hold_t = 0.0
 
         self.camera_x = 0
+
+        # ── Skill bar і Focus ────────────────────────────────────
+        self.skill_bar = SkillBar(default_loadout())
+        self.focus     = FocusBar()
 
         # UI (з BattleUIMixin)
         self._create_ui()
@@ -240,7 +258,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
 
     def _handle_double_tap(self, key: int):
         """Детектує подвійне натискання A/D і запускає ухилення."""
-        import time
         now = time.monotonic()
         if key not in (pygame.K_a, pygame.K_LEFT, pygame.K_d, pygame.K_RIGHT):
             return
@@ -285,158 +302,201 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
 
     def _check_collisions(self):
         """Перевірка зіткнень вручну (для Pymunk 7.x)."""
-        # Хітбокс гравця → ворог
-        if self.player_fighter.attack_hitbox and self.player_fighter.attack_active:
-            hitbox_pos = self.player_fighter.attack_hitbox.body.position
-            enemy_pos  = self.enemy_fighter.body.position
-            distance   = ((hitbox_pos.x - enemy_pos.x) ** 2 +
-                          (hitbox_pos.y - enemy_pos.y) ** 2) ** 0.5
+        self._check_player_hits_enemy()
+        self._check_enemy_hits_player()
 
-            if distance < 60:
-                # ── Шанс промаху ──
-                p_lvl = self.player.level
-                e_lvl = getattr(self.enemy_data, "level", p_lvl)
-                base_miss = self._calc_miss_chance(p_lvl, e_lvl)
+    def _check_player_hits_enemy(self):
+        """Обробляє влучання гравця по ворогу."""
+        pf = self.player_fighter
+        if not (pf.attack_hitbox and pf.attack_active):
+            return
+        hp  = pf.attack_hitbox.body.position
+        ep  = self.enemy_fighter.body.position
+        if ((hp.x - ep.x) ** 2 + (hp.y - ep.y) ** 2) ** 0.5 >= HIT_RANGE:
+            return
 
-                # Важкий удар: +20% до miss, але ×1.8 урону
-                heavy = getattr(self.player_fighter, "_pending_heavy", False)
-                if heavy:
-                    self.player_fighter._pending_heavy = False
-                    heavy_miss_bonus = 0.20
-                else:
-                    heavy_miss_bonus = 0.0
+        heavy = self._consume_heavy_flag()
 
-                if random.random() < (base_miss + heavy_miss_bonus):
-                    self.enemy_fighter.take_damage(0, is_miss=True)
-                    self.player_fighter._remove_attack_hitbox()
-                    self._log_event("Промах!", (160, 200, 255))
-                    return
+        if self._roll_miss(heavy):
+            self.enemy_fighter.take_damage(0, is_miss=True)
+            pf._remove_attack_hitbox()
+            self._log_event("Промах!", (160, 200, 255))
+            return
 
-                multiplier  = getattr(self.player_fighter.attack_hitbox, "damage_multiplier", 1.0)
-                if heavy:
-                    multiplier *= 1.8
-                # dodge_attack: +40% до першої атаки після ухилення
-                if (self.player.has_perk("dodge_attack") and
-                        getattr(self.player_fighter, "_post_dodge_bonus", False)):
-                    multiplier *= 1.4
-                    self.player_fighter._post_dodge_bonus = False
-                combo_mult  = self.player_fighter.get_attack_damage_multiplier()
-                # ghost_dodge: після ухилення — гарантований крит
-                ghost_crit  = (self.player.has_perk("ghost_dodge") and
-                               getattr(self.player_fighter, "_post_dodge_bonus", False))
-                is_crit     = ghost_crit or self.player_fighter._roll_crit()
-                crit_mult   = 2.0 if is_crit else 1.0
-                self.player_fighter.last_hit_crit = is_crit
-                damage = int(self.player_fighter.attack_damage * multiplier * combo_mult * crit_mult)
+        damage, is_crit, combo_mult = self._calc_player_damage(heavy)
+        knockback = self._calc_player_knockback(is_crit)
 
-                knockback_dir = 1 if self.player_fighter.facing_right else -1
-                knockback = (400 if self.player_fighter.combo_count >= 3 else 300) * knockback_dir
+        if self._boss_phase_mgr:
+            damage = self._boss_phase_mgr.absorb_damage(damage)
+        if damage > 0:
+            self.enemy_fighter.take_damage(damage, knockback, is_crit=is_crit)
+        pf._remove_attack_hitbox()
+        self.enemy_ai.on_hit()
+        self.enemy_ai.on_received_hit()
+        sounds.play("sword_hit")
 
-                if is_crit and self.player.has_perk("crit_knockback"):
-                    knockback = int(knockback * 1.8)
-                if self.player.has_perk("auto_knockback"):
-                    knockback = int(knockback * 1.3)
+        self.stat_damage_dealt += damage
+        self.stat_hits_landed  += 1
+        if is_crit:
+            self.stat_crits += 1
 
-                # Босовий щит поглинає урон
-                if self._boss_phase_mgr:
-                    damage = self._boss_phase_mgr.absorb_damage(damage)
-                if damage > 0:
-                    self.enemy_fighter.take_damage(damage, knockback, is_crit=is_crit)
-                self.player_fighter._remove_attack_hitbox()
-                self.enemy_ai.on_hit()
-                self.enemy_ai.on_received_hit()   # guard break накопичення
-                sounds.play("sword_hit")
-                self.stat_damage_dealt += damage
-                self.stat_hits_landed  += 1
+        self._log_player_hit(damage, is_crit, heavy)
+        self._update_focus_on_hit(damage, is_crit)
+        self._battle_logger.hit(damage, is_crit=is_crit)
+        if combo_mult > 1.0:
+            self._battle_logger.combo(pf.combo_count)
 
-                # ── Shake ──
-                if is_crit or heavy:
-                    self._shake(12 if is_crit else 9, 0.22)
-                    label = f"КРИТ! -{damage}" if is_crit else f"💥 ВАЖКИЙ -{damage}"
-                    self._log_event(label, (255, 220, 50) if is_crit else (255, 160, 50))
-                elif damage >= 30:
-                    self._shake(7, 0.14)
-                    self._log_event(f"-{damage}", (255, 160, 50))
-                else:
-                    self._log_event(f"-{damage}", (220, 160, 140))
+        self._apply_on_hit_perks(damage, is_crit, heavy)
+        pf._just_parried = False
 
-                if is_crit:
-                    self.stat_crits += 1
-                self._battle_logger.hit(damage, is_crit=is_crit)
-                if combo_mult > 1.0:
-                    self._battle_logger.combo(self.player_fighter.combo_count)
+    # ── Допоміжні методи для _check_player_hits_enemy ────────────────────
 
-                if self.player.has_perk("stun_10") and random.random() < 0.10:
-                    self.enemy_fighter.stun_timer = 0.7
-                    self._battle_logger.stun()
-                    self._log_event("Ворога оглушено!", (200, 180, 255))
+    def _consume_heavy_flag(self) -> bool:
+        """Знімає та повертає прапорець важкого удару."""
+        heavy = getattr(self.player_fighter, "_pending_heavy", False)
+        if heavy:
+            self.player_fighter._pending_heavy = False
+        return heavy
 
-                if is_crit and self.player.has_perk("crit_burn"):
-                    self.enemy_fighter.burn_timer = 2.0
-                    self._battle_logger.burn()
-                    self._log_event("🔥 Підпал!", (255, 120, 40))
+    def _roll_miss(self, heavy: bool) -> bool:
+        """Повертає True якщо удар промахнувся."""
+        p_lvl = self.player.level
+        e_lvl = getattr(self.enemy_data, "level", p_lvl)
+        miss  = self._calc_miss_chance(p_lvl, e_lvl)
+        if heavy:
+            miss += HEAVY_MISS_BONUS
+        return random.random() < miss
 
-                # Важкий удар накладає кровотечу (8% шанс + завжди якщо крит+важкий)
-                bleed_chance = 0.08
-                if heavy: bleed_chance += 0.25
-                if is_crit: bleed_chance += 0.15
-                if random.random() < bleed_chance:
-                    self.enemy_fighter.bleed_timer = max(
-                        self.enemy_fighter.bleed_timer, 4.0)
-                    self._log_event("🩸 Кровотеча!", (180, 30, 30))
-                    self.stat_bleed_applied += 1
-                    # counter_bleed: після парирування → 5 сек
-                    if self.player.has_perk("counter_bleed") and getattr(self.player_fighter, "_just_parried", False):
-                        self.enemy_fighter.bleed_timer = max(self.enemy_fighter.bleed_timer, 5.0)
+    def _calc_player_damage(self, heavy: bool) -> tuple[int, bool, float]:
+        """Повертає (damage, is_crit, combo_mult) для удару гравця."""
+        pf = self.player_fighter
+        multiplier = getattr(pf.attack_hitbox, "damage_multiplier", 1.0)
 
-                if self.player.has_perk("lifesteal"):
-                    heal = max(1, int(damage * 0.20))
-                    self.player_fighter.hp = min(
-                        self.player_fighter.max_hp,
-                        self.player_fighter.hp + heal)
-                    self._battle_logger.lifesteal(heal)
-                    self._log_event(f"💚 +{heal} HP", (100, 220, 100))
+        if heavy:
+            multiplier *= HEAVY_DAMAGE_MULT
 
-                # parry_heal: після парирування — +8% HP
-                if self.player.has_perk("parry_heal") and getattr(self.player_fighter, "_just_parried", False):
-                    heal = max(1, int(self.player_fighter.max_hp * 0.08))
-                    self.player_fighter.hp = min(self.player_fighter.max_hp,
-                                                  self.player_fighter.hp + heal)
-                    self._log_event(f"⚔ Парирування +{heal} HP", (180, 255, 180))
+        if (self.player.has_perk("dodge_attack") and
+                getattr(pf, "_post_dodge_bonus", False)):
+            multiplier *= 1.4
+            pf._post_dodge_bonus = False
 
-                # Скидаємо _just_parried після першого удару
-                self.player_fighter._just_parried = False
+        combo_mult = pf.get_attack_damage_multiplier()
 
-        # Хітбокс ворога → гравець
-        if self.enemy_fighter.attack_hitbox and self.enemy_fighter.attack_active:
-            hitbox_pos = self.enemy_fighter.attack_hitbox.body.position
-            player_pos = self.player_fighter.body.position
-            distance   = ((hitbox_pos.x - player_pos.x) ** 2 +
-                          (hitbox_pos.y - player_pos.y) ** 2) ** 0.5
+        ghost_crit = (self.player.has_perk("ghost_dodge") and
+                      getattr(pf, "_post_dodge_bonus", False))
+        is_crit = ghost_crit or pf._roll_crit()
+        pf.last_hit_crit = is_crit
 
-            if distance < 60:
-                damage    = self.enemy_fighter.attack_damage
-                knockback = -300 if self.enemy_fighter.facing_right else 300
+        damage = int(pf.attack_damage * multiplier * combo_mult * (2.0 if is_crit else 1.0))
+        return damage, is_crit, combo_mult
 
-                # ── Захист: −60% урону ──
-                if self._defend_active:
-                    damage = max(1, int(damage * 0.40))
-                    self._defend_active = False
-                    self._log_event(f"🛡 Поглинуто! -{damage}", (100, 180, 255))
-                else:
-                    rage_tag = " [RAGE]" if self.enemy_fighter.rage_mode else ""
-                    if damage >= 25:
-                        self._shake(10, 0.20)
-                        self._log_event(f"Ворог: -{damage}{rage_tag}", (255, 80, 80))
-                    else:
-                        self._log_event(f"Ворог: -{damage}", (220, 130, 130))
+    def _calc_player_knockback(self, is_crit: bool) -> int:
+        """Обраховує відкидання для удару гравця."""
+        pf        = self.player_fighter
+        direction = 1 if pf.facing_right else -1
+        base      = 400 if pf.combo_count >= 3 else 300
+        knockback = base * direction
+        if is_crit and self.player.has_perk("crit_knockback"):
+            knockback = int(knockback * HEAVY_DAMAGE_MULT)
+        if self.player.has_perk("auto_knockback"):
+            knockback = int(knockback * 1.3)
+        return knockback
 
-                self.player_fighter.take_damage(damage, knockback)
-                self.enemy_fighter._remove_attack_hitbox()
-                sounds.play("sword_hit")
-                self.stat_damage_taken += damage
-                self.stat_hits_taken   += 1
-                self._battle_logger.enemy_hit(damage)
+    def _log_player_hit(self, damage: int, is_crit: bool, heavy: bool):
+        """Shake + inline лог для удару гравця."""
+        if is_crit:
+            self._shake(12, 0.22)
+            self._log_event(f"КРИТ! -{damage}", (255, 220, 50))
+        elif heavy:
+            self._shake(9, 0.22)
+            self._log_event(f"💥 ВАЖКИЙ -{damage}", (255, 160, 50))
+        elif damage >= 30:
+            self._shake(7, 0.14)
+            self._log_event(f"-{damage}", (255, 160, 50))
+        else:
+            self._log_event(f"-{damage}", (220, 160, 140))
+
+    def _update_focus_on_hit(self, damage: int, is_crit: bool):
+        """Нараховує Focus за влучний удар."""
+        self.focus.gain(FocusBar.GAIN_HEAVY if (is_crit or damage >= 25) else FocusBar.GAIN_LIGHT)
+        if is_crit:
+            self.focus.gain(FocusBar.GAIN_CRIT)
+
+    def _apply_on_hit_perks(self, damage: int, is_crit: bool, heavy: bool):
+        """Пасивні перки що спрацьовують при влучному ударі."""
+        pf           = self.player_fighter
+        just_parried = getattr(pf, "_just_parried", False)
+
+        if self.player.has_perk("stun_10") and random.random() < 0.10:
+            self.enemy_fighter.stun_timer = 0.7
+            self._battle_logger.stun()
+            self._log_event("Ворога оглушено!", (200, 180, 255))
+
+        if is_crit and self.player.has_perk("crit_burn"):
+            self.enemy_fighter.burn_timer = 2.0
+            self._battle_logger.burn()
+            self._log_event("🔥 Підпал!", (255, 120, 40))
+
+        bleed_chance = 0.08 + (0.25 if heavy else 0) + (0.15 if is_crit else 0)
+        if random.random() < bleed_chance:
+            duration = 5.0 if (self.player.has_perk("counter_bleed") and just_parried) else 4.0
+            self.enemy_fighter.bleed_timer = max(self.enemy_fighter.bleed_timer, duration)
+            self._log_event("🩸 Кровотеча!", (180, 30, 30))
+            self.stat_bleed_applied += 1
+
+        if self.player.has_perk("lifesteal"):
+            heal = max(1, int(damage * LIFESTEAL_RATE))
+            pf.hp = min(pf.max_hp, pf.hp + heal)
+            self._battle_logger.lifesteal(heal)
+            self._log_event(f"💚 +{heal} HP", (100, 220, 100))
+
+        if self.player.has_perk("parry_heal") and just_parried:
+            heal = max(1, int(pf.max_hp * 0.08))
+            pf.hp = min(pf.max_hp, pf.hp + heal)
+            self._log_event(f"⚔ Парирування +{heal} HP", (180, 255, 180))
+
+    def _check_enemy_hits_player(self):
+        """Обробляє влучання ворога по гравцю."""
+        if not (self.enemy_fighter.attack_hitbox and self.enemy_fighter.attack_active):
+            return
+
+        hitbox_pos = self.enemy_fighter.attack_hitbox.body.position
+        player_pos = self.player_fighter.body.position
+        distance   = ((hitbox_pos.x - player_pos.x) ** 2 +
+                      (hitbox_pos.y - player_pos.y) ** 2) ** 0.5
+
+        if distance >= HIT_RANGE:
+            return
+
+        damage    = self.enemy_fighter.attack_damage
+        knockback = -300 if self.enemy_fighter.facing_right else 300
+
+        # ── Захист: −60% урону ──
+        if self._defend_active:
+            damage = max(1, int(damage * BLOCK_REDUCTION))
+            self._defend_active = False
+            self._log_event(f"🛡 Поглинуто! -{damage}", (100, 180, 255))
+        else:
+            rage_tag = " [RAGE]" if self.enemy_fighter.rage_mode else ""
+            if damage >= 25:
+                self._shake(10, 0.20)
+                self._log_event(f"Ворог: -{damage}{rage_tag}", (255, 80, 80))
+            else:
+                self._log_event(f"Ворог: -{damage}", (220, 130, 130))
+
+        # Counter Stance — перехоплюємо удар
+        for sk in self.skill_bar.slots:
+            if isinstance(sk, CounterStance) and sk.is_active:
+                damage = sk.on_hit_received(
+                    self.player_fighter, damage,
+                    self.enemy_fighter, self)
+                break
+        self.player_fighter.take_damage(damage, knockback)
+        self.enemy_fighter._remove_attack_hitbox()
+        sounds.play("sword_hit")
+        self.stat_damage_taken += damage
+        self.stat_hits_taken   += 1
+        self._battle_logger.enemy_hit(damage)
 
     # ══════════════════════════════════════════
     #  ЗАВЕРШЕННЯ БОЮ
@@ -461,11 +521,9 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
             self.player.gold += self.enemy_data.gold_reward
             self.player.total_gold_earned += self.enemy_data.gold_reward
 
-            from ui.notifications import notify
             notify(f"💰 +{self.enemy_data.gold_reward}  ⭐ +{self.enemy_data.xp_reward} XP",
                    kind="gold", duration=2.5)
 
-            import random
             loot_names = []
             for item in self.enemy_data.loot_items:
                 if random.random() < 0.55:
@@ -477,7 +535,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
                 if qty <= 0:
                     continue
                 self.player.add_material(mat_id, qty)
-                from game.data import MATERIALS
                 mat = MATERIALS.get(mat_id)
                 if mat:
                     self.loot_gained.append(("mat", mat.icon, mat.name, qty))
@@ -558,7 +615,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         healed = self.player_fighter.max_hp - self.player_fighter.hp
         self.player_fighter.hp = min(self.player_fighter.max_hp,
                                      self.player_fighter.hp + potion.hp_restore)
-        from ui.notifications import notify
         notify(f"🧪 {msg}", kind="craft", duration=1.5)
         self._log_event(f"🧪 +{potion.hp_restore} HP", (80, 220, 120))
 
@@ -582,6 +638,24 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
             if not self.battle_over and not self.paused:
                 self._handle_double_tap(event.key)
 
+            # ── Скіли 1-4 ──────────────────────────────────────────
+            if not self.battle_over and not self.paused:
+                skill_keys = {
+                    pygame.K_1: 0,
+                    pygame.K_2: 1,
+                    pygame.K_3: 2,
+                    pygame.K_4: 3,
+                }
+                if event.key in skill_keys:
+                    idx = skill_keys[event.key]
+                    self.skill_bar.try_use(
+                        idx,
+                        self.player_fighter,
+                        self.enemy_fighter,
+                        self.focus,
+                        self,
+                    )
+
             # ── J натиснуто — починаємо відлік заряду ──────────
             if event.key == pygame.K_j and not self.battle_over and not self.paused:
                 if not self._j_held:
@@ -600,11 +674,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
                 charged = self.player_fighter.release_charge()
                 if charged:
                     self._log_event("⚡ ЗАРЯДЖЕНИЙ УДАР!", (255, 230, 60))
-
-        elif event.type == pygame.KEYUP:
-            self.keys_pressed.discard(event.key)
-            if event.key in (pygame.K_w, pygame.K_UP, pygame.K_SPACE):
-                self.jump_pressed = False
 
         if self.result_screen and event.type == pygame.MOUSEBUTTONDOWN:
             mouse_pos = pygame.mouse.get_pos()
@@ -676,9 +745,8 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         # ── Shake екрану ──
         if self._shake_timer > 0:
             self._shake_timer -= dt
-            import random as _r
             m = self._shake_mag
-            self._shake_offset = (_r.randint(-m, m), _r.randint(-m, m))
+            self._shake_offset = (random.randint(-m, m), random.randint(-m, m))
             if self._shake_timer <= 0:
                 self._shake_offset = (0, 0)
                 self._shake_mag    = 0
@@ -704,6 +772,8 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         if self._j_held:
             self.player_fighter.update_charge(edt)
 
+        self.skill_bar.update(edt)
+        self.focus.update(edt)
         self._handle_player_input()
         self.enemy_ai.update(edt, self.player_fighter)
         self.space.step(edt)
@@ -713,11 +783,11 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         # Обмеження бійців в межах арени
         for fighter in [self.player_fighter, self.enemy_fighter]:
             x = fighter.body.position.x
-            if x < 60:
-                fighter.body.position = (60, fighter.body.position.y)
+            if x < ARENA_MARGIN:
+                fighter.body.position = (ARENA_MARGIN, fighter.body.position.y)
                 fighter.body.velocity = (max(0, fighter.body.velocity.x), fighter.body.velocity.y)
-            elif x > SCREEN_WIDTH - 60:
-                fighter.body.position = (SCREEN_WIDTH - 60, fighter.body.position.y)
+            elif x > SCREEN_WIDTH - ARENA_MARGIN:
+                fighter.body.position = (SCREEN_WIDTH - ARENA_MARGIN, fighter.body.position.y)
                 fighter.body.velocity = (min(0, fighter.body.velocity.x), fighter.body.velocity.y)
 
         self.camera_x = 0
@@ -729,12 +799,12 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
             # Finishing blow — крит або важкий удар
             if self.player_fighter.last_hit_crit:
                 self._finish_flash_text  = "НОКАУТ!"
-                self._finish_flash_timer = 1.8
+                self._finish_flash_timer = FINISH_FLASH_TIME
                 self.stat_heavy_kill     = True
                 self._shake(20, 0.5)
             elif getattr(self.player_fighter, "_pending_heavy", False):
                 self._finish_flash_text  = "НИЩІВНИЙ УДАР!"
-                self._finish_flash_timer = 1.8
+                self._finish_flash_timer = FINISH_FLASH_TIME
                 self.stat_heavy_kill     = True
                 self._shake(15, 0.4)
             self._end_battle(True)
@@ -801,12 +871,13 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
 
     def _on_parry_success(self):
         """Реакція на вдале парирування."""
+        self.focus.gain(30)  # parry bonus
         self._log_event("⚔ ПАРИРУВАННЯ!", (180, 255, 180))
         self.stat_parries += 1
         self._shake(6, 0.15)
         # Slow-motion 0.3 секунди на 20% швидкості
         self._slowmo_timer  = 0.30
-        self._slowmo_factor = 0.20
+        self._slowmo_factor = 0.20   # 20% швидкості під час slow-mo
         # Оглушуємо ворога
         self.enemy_fighter.stun_timer = max(self.enemy_fighter.stun_timer, 1.0)
         # Наступний удар гравця ×1.5
@@ -833,7 +904,6 @@ class FightingBattleScene(BattleDrawMixin, BattleUIMixin, BattlePauseMixin, Scen
         self.player.inventory.remove(potion)
         self.stat_potions_used += 1
         self._log_event(f"🧪 +{healed} HP ({potion.name})", (100, 220, 120))
-        from game.save_manager import autosave
         autosave(self.player)
         return True
 

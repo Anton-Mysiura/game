@@ -163,6 +163,12 @@ class BattleUIMixin:
             screen.blit(txt, (cx + 3, y + 2))
             cx += 58
 
+    def _draw_skill_bar_ui(self):
+        """Малює skill bar і focus bar (якщо є)."""
+        if hasattr(self, 'skill_bar') and hasattr(self, 'focus'):
+            self.skill_bar.draw(self.screen if hasattr(self,'screen') else None,
+                                self.focus, SCREEN_WIDTH, SCREEN_HEIGHT)
+
     def _draw_action_bar(self, screen):
         """Малює панель дій з cooldown-кільцями і підсвіченням."""
         import math

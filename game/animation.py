@@ -23,6 +23,16 @@ class Animation:
         self.current_frame = 0
         self.time_accumulated = 0.0
         self.finished = False
+        # Кешовані дзеркальні кадри — створюються один раз при першому зверненні
+        self._flipped_frames: List[pygame.Surface] | None = None
+
+    def get_flipped_frame(self) -> pygame.Surface:
+        """Повертає поточний кадр, відзеркалений по горизонталі (з кешу)."""
+        if self._flipped_frames is None:
+            self._flipped_frames = [
+                pygame.transform.flip(f, True, False) for f in self.frames
+            ]
+        return self._flipped_frames[self.current_frame]
 
     def update(self, dt: float):
         """Оновлює анімацію."""
@@ -136,8 +146,13 @@ class AnimationController:
         if not self.current_animation:
             log.warning("AnimationController: немає активної анімації!")
             return None
-
         return self.current_animation.get_current_frame()
+
+    def get_flipped_frame(self) -> pygame.Surface:
+        """Повертає поточний кадр, відзеркалений (з кешу)."""
+        if not self.current_animation:
+            return None
+        return self.current_animation.get_flipped_frame()
 
     def is_finished(self) -> bool:
         """Перевіряє чи анімація завершилась."""

@@ -5,6 +5,16 @@
 import pygame
 from typing import TYPE_CHECKING
 
+from ui.assets import assets
+from ui.constants import (
+    SCREEN_WIDTH, SCREEN_HEIGHT,
+    FONT_SIZE_NORMAL, FONT_SIZE_HUGE,
+    COLOR_GOLD, COLOR_BG,
+    PANEL_PADDING,
+)
+from ui.components import Button, Panel, TextBox
+from game.save_manager import autosave
+
 if TYPE_CHECKING:
     from game.core import Game
 
@@ -44,8 +54,6 @@ class SceneWithBackground(Scene):
 
     def on_enter(self):
         """Завантажує фон при вході."""
-        from ui.assets import assets
-        from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT
         self.background = assets.load_texture("locations", self.background_name,
                                               (SCREEN_WIDTH, SCREEN_HEIGHT))
 
@@ -121,9 +129,6 @@ class DungeonScene(SceneWithBackground, SceneWithButtons):
         SceneWithBackground.__init__(self, game, self.BACKGROUND)
         SceneWithButtons.__init__(self, game)
 
-        from ui.components import Panel, TextBox
-        from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT, FONT_SIZE_NORMAL
-
         self.stage = "intro"
 
         self.dialog_panel = Panel(SCREEN_WIDTH // 2 - 400, SCREEN_HEIGHT - 300, 800, 250, alpha=True)
@@ -133,9 +138,6 @@ class DungeonScene(SceneWithBackground, SceneWithButtons):
 
     def _show_intro(self):
         """Вступ до локації."""
-        from ui.components import Button
-        from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT
-
         self.stage = "intro"
         self.text_box.set_text(self.INTRO_TEXT)
 
@@ -159,10 +161,6 @@ class DungeonScene(SceneWithBackground, SceneWithButtons):
 
     def _after_battle(self):
         """Нагорода та текст після перемоги."""
-        from ui.components import Button
-        from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT
-        from game.save_manager import autosave
-
         self.stage = "after_battle"
         self.player.gold += self.GOLD_REWARD
 
@@ -183,9 +181,6 @@ class DungeonScene(SceneWithBackground, SceneWithButtons):
 
     def draw(self, screen: pygame.Surface):
         """Малює фон, заголовок, діалог і кнопки."""
-        from ui.assets import assets
-        from ui.constants import SCREEN_WIDTH, FONT_SIZE_HUGE, COLOR_GOLD
-
         super().draw(screen)
 
         font_title = assets.get_font(FONT_SIZE_HUGE, bold=True)
@@ -204,8 +199,6 @@ class DialogScene(SceneWithBackground):
 
     def __init__(self, game: 'Game', background_name: str):
         super().__init__(game, background_name)
-        from ui.components import Panel, TextBox
-        from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT, PANEL_PADDING
 
         # Панель для тексту
         panel_width = SCREEN_WIDTH - 200
@@ -247,13 +240,10 @@ class SceneWithUIBackground(Scene):
         self._bg = None
 
     def on_enter(self):
-        from ui.assets import assets
-        from ui.constants import SCREEN_WIDTH, SCREEN_HEIGHT
         self._bg = assets.get_background(self._scene_key, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
     def draw_background(self, screen: pygame.Surface):
         """Малює фон — виклич на початку draw()."""
-        from ui.constants import COLOR_BG
         if self._bg:
             screen.blit(self._bg, (0, 0))
         else:
