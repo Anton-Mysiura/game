@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Saves
+saves/*.json
+
+# Logs
+~/.dark_kingdom_saves/
