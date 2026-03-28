@@ -9,3 +9,12 @@ saves/*.json
 
 # Logs
 ~/.dark_kingdom_saves/
+
+# IDE
+.idea/
+.vscode/
+
+# Virtual environment
+.venv/
+venv/
+env/
